@@ -1036,7 +1036,7 @@ os_init(void) {
 		bfree -= n;
 	}
 	if (! bfree) {
-		perr("to many command line arguments");
+		perr("too many command line arguments");
 		rc = (-1);
 		goto premature_exit;
 	}
