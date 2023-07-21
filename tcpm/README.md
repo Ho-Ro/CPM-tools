@@ -54,7 +54,7 @@ cc -o tcpm_disk tcpm_disk.c
 Convert `sysutil.mac` to the CP/M line end convention and assemble
 and link it using `tnylpo` and `m80.com`/`l80.com`:
 ```sh
-tnylpo_convert -u sysutil.mac -c sysutil.mac
+tnylpo-convert -u sysutil.mac -c sysutil.mac
 tnylpo m80 =sysutil
 tnylpo l80 sysutil/n,sysutil/e
 ```
@@ -85,7 +85,7 @@ memory size in kilobytes (`62` in our example).
 Then convert `tcpm.mac` to the CP/M line end convention and assemble/link
 it using `tnylpo` and `m80.com`/`l80.com`:
 ```sh
-tnylpo_convert -u tcpm.mac -c tcpm.mac
+tnylpo-convert -u tcpm.mac -c tcpm.mac
 tnylpo m80 =tcpm
 tnylpo l80 tcpm/n,tcpm/e
 ```
