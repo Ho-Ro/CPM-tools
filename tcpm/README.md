@@ -32,13 +32,13 @@ binaries, e.g. `CPMnn.COM` file resulting from a
 * the memory size in kilobytes for which this system image has been created
 (possible values are 20 to 64, and if you have a `CPMnn.COM`file, this
 value usually corresponds to the `nn` part of the file name; if you have a
-file called `CPM62.COM`, the memory size should be 62 KB)
+file called `CPM62.COM`, the memory size should be 62 kilobytes)
 * Microsoft's Utility Software Package or rather the Macro-80/Link-80
 assembler and linker (`m80.com` and `l80.com`) from this package (to
-compile `tcpm`and `sysutil`)
+assemble and link `tcpm`and `sysutil`)
 * (optional) the utility programs from the CP/M 2 distribution like `pip.com`,
-`stat.com`, or `movcpm.com` (if you want to change the memory size of
-your CP/M system image later on)
+`stat.com`, or `movcpm.com` (this you will need if you want to change the
+memory size of your CP/M system image later on)
 
 Please bear in mind that CP/M 2, its utilities and the Utility Software
 Package may be old and nowadays of little commercial value, but they are still
