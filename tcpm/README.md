@@ -51,8 +51,10 @@ Compile `tcpm_disk.c` using your host system C compiler:
 cc -o tcpm_disk tcpm_disk.c
 ```
 
-Assemble and link `sysutil.mac` using `tnylpo` and `m80.com`/`l80.com`:
+Convert `sysutil.mac` to the CP/M line end convention and assemble
+and link it using `tnylpo` and `m80.com`/`l80.com`:
 ```sh
+tnylpo_convert -u sysutil.mac -c sysutil.mac
 tnylpo m80 =sysutil
 tnylpo l80 sysutil/n,sysutil/e
 ```
@@ -76,21 +78,14 @@ own name, but `diskb.dta` is the default):
 ```
 This will create a non-bootable disk image with an empty directory.
 
-Edit `tcpm.mac`with your favourite text editor (`vi`, right?). Please take
-note that this file follows the CP/M (resp. MS-DOS) style line end convention
- (`<cr>`/`<lf>`), so if your text editor isn't able to handle this, you will
-have to use `tnylpo_convert` to convert it before and after editing:
-```sh
-tnylpo_convert -c tcpm.mac -u tcpm.mac
-vi tcpm.mac
-tnylpo_convert -u tcpm.mac -c tcpm.mac
-```
-(e.g., `vim` handles the CP/M line end convention out-of-the-box). Change
+Edit `tcpm.mac`with your favourite text editor (`vi`, right?). Change
 the definition of the symbol `sys_size_kb` near the top of the file to your
 memory size in kilobytes (`62` in our example).
 
-Assemble and link `tcpm.com` using `tnylpo` and `m80.com`/`l80.com`:
+Then convert `tcpm.mac` to the CP/M line end convention and assemble/link
+it using `tnylpo` and `m80.com`/`l80.com`:
 ```sh
+tnylpo_convert -c tcpm.mac -u tcpm.mac
 tnylpo m80 =tcpm
 tnylpo l80 tcpm/n,tcpm/e
 ```
