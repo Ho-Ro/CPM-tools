@@ -53,7 +53,7 @@ Assemble and link `sysutil.mac` using `tnylpo` and `m80.com`/`l80.com`:
 tnylpo m80 =sysutil
 tnylpo l80 sysutil/n,sysutil/e
 ```
-Some shells require you to use `\\=' instead of `=` in the `tnylpo m80` line.
+Some shells require you to use `\=` instead of `=` in the `tnylpo m80` line.
 
 Create a system disk image for disk A. This assumes that you have a system
 image called `cpm62.com` which was created by `MOVCPM`/`SAVE`, see above;
@@ -91,7 +91,7 @@ Assemble and link `tcpm.com` using `tnylpo` and `m80.com`/`l80.com`:
 tnylpo m80 =tcpm
 tnylpo l80 tcpm/n,tcpm/e
 ```
-(Again, you may have to change `=`to `\\=`.)
+(Again, you may have to change `=`to `\=`.)
 
 Now you should be able to boot CP/M:
 ```sh
