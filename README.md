@@ -53,7 +53,9 @@ is my preferred working environment.
 
 Consequently, if you are in search of the authentic look-and-feel of
 CP/M back in its heyday, `tnylpo` is probably not what you are
-looking for. If on the other hand you want to play with old CP/M source
+looking for. (Well, things change. If you are interested in this, you
+might chance a look into the subdirectory `tcpm`.)
+If on the other hand you want to play with old CP/M source
 code and compilers without having access to a CP/M computer, if you do not
 want to wait for the ages it takes the tired iron to create an executable,
 or if you simply prefer to edit your CP/M sources with your favourite
