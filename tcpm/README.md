@@ -241,7 +241,7 @@ offsets 1080h to 1e7fh. `tcpm_disk` supports both variants with its
 you will have to extract the CCP and BDOS parts using the `dd` command,
 effectively creating a raw system image).
 ## How does CP/M (resp. `tcpm`) interact with `tnylpo`?
-`tnylpo` doesn`t care too much about what happens with the data
+`tnylpo` doesn't care too much about what happens with the data
 structures it stored in the memory of the virtual machine; most of them are
 just initialized before program startup for the benefit of the application
 program (to supply it with a CP/M compatible environment) and are never
