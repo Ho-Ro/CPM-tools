@@ -1,6 +1,6 @@
-# tcpm - runs CP/M 2 under tnylpo
+# tcpm &mdash; runs CP/M 2 under tnylpo
 ## What is this?
-`tcpm` is  a CP/M (well, sort of &emdash; it needs to be run under `tnylpo`)
+`tcpm` is  a CP/M (well, sort of &mdash; it needs to be run under `tnylpo`)
 program which implements a full CP/M 2 (C)BIOS and thereby allows the actual
 DRI CP/M 2 operating system (CCP and BDOS) to execute under tnylpo.
 
@@ -260,7 +260,7 @@ CONOUT BIOS entry).
 
 Programs running in the `tcpm` environment can thus use the `tnylpo` BDOS
 and BIOS emulation (at the price of no longer being conforming CP/M programs)
-&emdash; this is in fact how `sysutil` (and the `tcpm` BIOS itself) access external
+&mdash; this is in fact how `sysutil` (and the `tcpm` BIOS itself) access external
 files and disk images. If you plan to do this, keep the following
 caveats in mind:
 * don't use `Reset Disk System` (13) or `Select Disk` (14),
