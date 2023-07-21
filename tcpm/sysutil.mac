@@ -1,0 +1,960 @@
+;
+; Copyright (c) 2023 Georg Brein. All rights reserved.
+;
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice,
+;    this list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright
+;    notice, this list of conditions and the following disclaimer in the
+;    documentation and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+; ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+; LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+; CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+; SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+; CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+; ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+; POSSIBILITY OF SUCH DAMAGE.
+;
+
+
+;
+; utility supplementing the tcpm environment
+; (works only under tcpm, but not dirctly under tnylpo)
+;
+; provides the ability
+; - to stop tcpm (and tnylpo) (sysutil halt)
+; - to transfer files into and out of tcpm disk images (sysutil copy)
+; - to show the currently attached disk images (sysutil status)
+; - to change disk images dynamically (sysutil change)
+; - to eject disk images (sysutil eject)
+; - to list files on tnylpo's emulated disk (sysutil dir)
+;
+
+
+		.z80
+
+		aseg
+
+
+;
+; regular BDOS entry
+;
+bdos		equ	5
+;
+; tnylpo's BDOS entry
+;
+tnylpo_bdos	equ	0ffffh-18
+;
+; BDOS functions
+;
+bdos_reset	equ	0
+bdos_conout	equ	2
+bdos_rbuffer	equ	10
+bdos_open	equ	15
+bdos_close	equ	16
+bdos_sfirst	equ	17
+bdos_snext	equ	18
+bdos_delete	equ	19
+bdos_rseq	equ	20
+bdos_wseq	equ	21
+bdos_create	equ	22
+bdos_setdma	equ	26
+bdos_rdrive	equ	37
+
+
+		org	100h
+
+
+start:		ld	sp,stack_top
+;
+; get addresses for data structures in the BIOS
+; - FCB for disk image A (fcb_a_p)
+; - FCB for disk image B (fcb_b_p)
+; - open flag for FCB for disk image B (fcb_b_open_p)
+;
+; The tcpm BIOS provides a pointer at WBOOTE+(17*3) (i.e., in place of the
+; non-existing 19th entry of its BIOS jump vector) which points to the
+; area containing the FCBs for the disk image files for A: (36 bytes) and B:
+; (36 bytes) and a flag indicating that the FCB for B: is valid (1 byte).
+;
+		ld	hl,(1)
+		ld	de,17*3
+		add	hl,de
+		ld	a,(hl)
+		inc	hl
+		ld	h,(hl)
+		ld	l,a
+		ld	(fcb_a_p),hl
+		ld	de,36
+		add	hl,de
+		ld	(fcb_b_p),hl
+		add	hl,de
+		ld	(fcb_b_open_p),hl
+;
+; if a command is supplied on the command line, it will be executed;
+; otherwise, a command loop is entered which may be exited by an empty line
+;
+		ld	hl,80h
+		ld	a,(hl)
+		or	a
+		jr	z,command_loop
+		ld	c,a
+		ld	b,0
+		inc	hl
+		ld	de,cmd_data
+		ldir
+		xor	a
+		ld	(de),a
+		call	do_command
+		jr	exit
+command_loop:	ld	a,'*'
+		call	put_char
+		ld	de,cmd_buffer
+		ld	c,bdos_rbuffer
+		call	bdos
+		call	put_crlf
+		ld	hl,cmd_length
+		ld	a,(hl)
+		or	a
+		jr	z,exit
+		inc	hl
+		ld	c,a
+		ld	b,0
+		add	hl,bc
+		ld	(hl),b
+		call	do_command
+		jr	command_loop
+exit:		ld	c,bdos_reset
+		jp	bdos
+
+
+;
+; displays character in A
+;
+put_char:	ld	e,a
+		ld	c,bdos_conout
+		jp	bdos
+
+
+;
+; displays a zero terminated message embedded in the code
+;
+put_msg:	pop	hl
+pm1:		ld	a,(hl)
+		inc	hl
+		or	a
+		jr	z,pm2
+		push	hl
+		call	put_char
+		pop	hl
+		jr	pm1
+pm2:		jp	(hl)
+		
+
+
+;
+; display a zero terminated message pointed to by HL
+;
+put_msg_hl:	ld	a,(hl)
+		or	a
+		ret	z
+		push	hl
+		call	put_char
+		pop	hl
+		inc	hl
+		jr	put_msg_hl
+	
+
+;
+; displays a line break
+;
+put_crlf:	call	put_msg
+		db	13,10,0
+		ret
+
+
+;
+; trim leading and trailing spaces, compress spaces, convert to upper case,
+; then parse and execute command
+;
+do_command:	ld	hl,cmd_data
+		ld	d,h
+		ld	e,l
+		set	0,c
+next_char:	ld	a,(hl)
+		inc	hl
+		or	a
+		jr	z,terminator
+		cp	' '
+		jr	nz,not_space_1
+		bit	0,c
+		jr	nz,next_char
+		set	0,c
+		jr	save_char
+not_space_1:	res	0,c
+		cp	'a'
+		jr	c,save_char
+		cp	'z'+1
+		jr	nc,save_char
+		xor	'a'-'A'
+save_char:	ld	(de),a
+		inc	de
+		jr	next_char
+terminator:	ld	(de),a
+		bit	0,c
+		jr	z,not_space_2
+		dec	de
+not_space_2:	ld	(de),a		
+;
+; check for halt command
+;
+check_halt:	ld	de,cmd_data
+		ld	hl,kw_halt
+		call	check_kw
+		jr	nz,check_copy
+		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+;
+; halt command: close drive FCBs and call bdos_reset from tnylpo
+;
+		call	close_fcb_b
+		call	close_fcb_a
+		call	put_msg
+		db	'bye',13,10,0
+		ld	c,bdos_reset
+		jp	tnylpo_bdos
+;
+; check for copy command
+;
+check_copy:	ld	de,cmd_data
+		ld	hl,kw_copy
+		call	check_kw
+		jp	nz,check_change
+;
+; copy command: parse and check file names
+; 
+		ld	hl,fcb_source
+		call	parse_fn
+		jr	c,cp_fn1_err
+		ld	hl,fcb_target
+		call	parse_fn
+		jr	c,cp_fn2_err
+		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+		ld	a,(fcb_source+1)
+		cp	' '
+		jr	nz,cp_fn1_ok
+cp_fn1_err:	call	put_msg
+		db	'illegal source file name',13,10,0
+		ret
+cp_fn1_ok:	ld	a,(fcb_target+1)
+		cp	' '
+		jr	nz,cp_fn2_ok
+		ld	a,(fcb_target+9)
+		cp	' '
+		jr	nz,cp_fn2_err
+;
+; target is only a drive name: use file name and extension of source file
+;
+		ld	hl,fcb_source+1
+		ld	de,fcb_target+1
+		ld	bc,11
+		ldir
+		jr	cp_fn2_ok
+cp_fn2_err:	call	put_msg
+		db	'illegal target file name',13,10,0
+		ret
+;
+; do copy: if drive name x: is used, use tnylpo BDOS to access the file,
+; otherwise use the regular BDOS
+;
+cp_fn2_ok:	ld	a,(fcb_source)
+		cp	'X'-'A'+1
+		ld	hl,bdos
+		jr	nz,cp_src_bdos
+		ld	hl,tnylpo_bdos
+		ld	a,1
+cp_src_bdos:	ld	(fcb_source),a
+		ld	(src_bdos_p),hl
+		ld	a,(fcb_target)
+		cp	'X'-'A'+1
+		ld	hl,bdos
+		jr	nz,cp_tgt_bdos
+		ld	hl,tnylpo_bdos
+		ld	a,1
+cp_tgt_bdos:	ld	(fcb_target),a
+		ld	(tgt_bdos_p),hl
+		xor	a
+		ld	(source_open),a
+		ld	(target_open),a
+		ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	source_bdos
+		ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	target_bdos
+		ld	de,fcb_source
+		ld	c,bdos_open
+		call	source_bdos
+		inc	a
+		jr	nz,cp_open_ok
+		call	put_msg
+		db	'cannot open source file',13,10,0
+		jr	cp_end
+cp_open_ok:	ld	a,1
+		ld	(source_open),a
+		ld	de,fcb_target
+		ld	c,bdos_delete
+		call	target_bdos
+		ld	de,fcb_target
+		ld	c,bdos_create
+		call	target_bdos
+		inc	a
+		jr	nz,cp_make_ok
+		call	put_msg
+		db	'cannot create target file',13,10,0
+		jr	cp_end
+cp_make_ok:	ld	a,1
+		ld	(target_open),a
+cp_loop:	ld	de,fcb_source
+		ld	c,bdos_rseq
+		call	source_bdos
+		or	a
+		jr	nz,cp_end
+		ld	de,fcb_target
+		ld	c,bdos_wseq
+		call	target_bdos
+		or	a
+		jr	z,cp_loop
+		call	put_msg
+		db	'cannot write target file',13,10,0
+cp_end:	ld	a,(target_open)
+		or 	a
+		jr	z,cp_tgt_closed
+		ld	de,fcb_target
+		ld	c,bdos_close
+		call	target_bdos
+		inc	a
+		jr	nz,cp_tgt_closed
+		call	put_msg
+		db	'cannot close target file',13,10,0
+cp_tgt_closed:	ld	a,(source_open)
+		or	a
+		jr	z,cp_src_closed
+		ld	de,fcb_source
+		ld	c,bdos_close
+		call	source_bdos
+		inc	a
+		jr	nz,cp_src_closed
+		call	put_msg
+		db	'cannot close source file',13,10,0
+cp_src_closed:	ret
+;
+; check for change command
+;
+check_change:	ld	de,cmd_data
+		ld	hl,kw_change
+		call	check_kw
+		jp	nz,check_eject
+;
+; change command
+;
+		ld	hl,fcb_source
+		call	parse_fn
+		jr	c,chg_drive_err
+		ld	a,(fcb_source+1)
+		cp	' '
+		jr	nz,chg_drive_err
+		ld	a,(fcb_source+9)
+		cp	' '
+		jr	nz,chg_drive_err
+		ld	a,(fcb_source)
+		cp	1
+		jr	c,chg_drive_err
+		cp	2+1
+		jr	c,chg_drive_ok
+chg_drive_err:	call	put_msg
+		db	'drive must be a: or b:',13,10,0
+		ret
+chg_drive_ok:	ld	hl,fcb_target
+		call	parse_fn
+		jr	c,chg_fn_err
+		ld	a,(fcb_target)
+		cp	'X'-'A'+1
+		jr	nz,chg_fn_err
+		ld	a,(fcb_target+1)
+		cp	' '
+		jr	nz,chg_fn_ok
+chg_fn_err:	call	put_msg
+		db	'image file missing/not on drive X:',13,10,0
+		ret
+chg_fn_ok:	ld	a,1
+		ld	(fcb_target),a
+		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+;
+; do disk change
+;
+		ld	de,fcb_target
+		ld	c,bdos_open
+		call	tnylpo_bdos
+		inc	a
+		jr	nz,chg_open_ok
+		call	put_msg
+		db	'cannot open image file',13,10,0
+		ret
+;
+; change the image for the respective drive and reset the drive
+;
+chg_open_ok:	ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	tnylpo_bdos
+		ld	a,(fcb_source)
+		cp	1
+		jr	nz,chg_drive_b
+		ld	de,fcb_target
+		ld	c,bdos_rseq
+		call	tnylpo_bdos
+		or	a
+		jr	nz,chg_no_sysimg
+		ld	a,(sector_buffer)
+		cp	'D'
+		jr	nz,chg_no_sysimg
+		ld	a,(sector_buffer+1)
+		cp	'S'
+		jr	z,chg_a_ok
+chg_no_sysimg:	ld	de,fcb_target
+		ld	c,bdos_close
+		call	tnylpo_bdos
+		call	put_msg
+		db	'file is not a system disk image',13,10,0
+		ret
+chg_a_ok:	call	close_fcb_a
+		ld	de,(fcb_a_p)
+		ld	hl,fcb_target
+		ld	bc,36
+		ldir
+		ld	de,1
+		jr	chg_reset_drv
+chg_drive_b:	ld	de,fcb_target
+		ld	c,bdos_rseq
+		call	tnylpo_bdos
+		or	a
+		jr	nz,chg_no_img
+		ld	a,(sector_buffer)
+		cp	'D'
+		jr	nz,chg_no_img
+		ld	a,(sector_buffer+1)
+		cp	'S'
+		jr	z,chg_b_ok
+		cp	'D'
+		jr	z,chg_b_ok
+chg_no_img:	ld	de,fcb_target
+		ld	c,bdos_close
+		call	tnylpo_bdos
+		call	put_msg
+		db	'file is not a disk image',13,10,0
+		ret
+chg_b_ok:	call	close_fcb_b
+		ld	de,(fcb_b_p)
+		ld	hl,fcb_target
+		ld	bc,36
+		ldir
+		ld	hl,(fcb_b_open_p)
+		ld	(hl),1
+		ld	de,2
+chg_reset_drv:	ld	c,bdos_rdrive
+		jp	bdos
+;
+; check for eject command
+;
+check_eject:	ld	de,cmd_data
+		ld	hl,kw_eject
+		call	check_kw
+		jp	nz,check_help
+;
+; eject command
+;
+		ld	hl,fcb_source
+		call	parse_fn
+		jr	c,eject_err
+		ld	a,(fcb_source+1)
+		cp	' '
+		jr	nz,eject_err
+		ld	a,(fcb_source+9)
+		cp	' '
+		jr	nz,eject_err
+		ld	a,(fcb_source)
+		cp	2
+		jr	z,eject_ok
+eject_err:	call	put_msg
+		db	'only drive B: may be ejected',13,10,0
+		ret
+eject_ok:	ld	a,(de)
+		or	a
+		jp	nz,extra_params
+		call	close_fcb_b
+		ld	de,2
+		ld	c,bdos_rdrive
+		jp	bdos
+;
+; check for help command
+;
+check_help:	ld	de,cmd_data
+		ld	hl,kw_help
+		call	check_kw
+		jp	nz,check_status
+;
+; help command
+;
+		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+		call	put_msg
+		db	'valid commands:',13,10
+		db	'help - show this help text',13,10
+		db	'halt - exit CP/M',13,10
+		db	'copy <src-fn> <dst-fn> - copy file',13,10
+		db	'    drive x: in <src-fn> or <dst-fn> refers to '
+		db	'drive A of tnylpo',13,10
+		db	'change (a:|b:) x:<image-fn> - attaches a new disk '
+		db	'image to drive A or B',13,10
+		db	'eject b: - detaches disk image from drive B',13,10
+		db	'    drive A must be attached to a disk image at '
+		db	'all times',13,10
+		db	'dir (a:|b:|x:) - list directory',13,10
+		db	'status - show attached disk images',13,10,0
+		ret
+;
+; check for status command
+;
+check_status:	ld	de,cmd_data
+		ld	hl,kw_status
+		call	check_kw
+		jp	nz,check_dir
+;
+; status  command
+;
+		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+		call	put_msg
+		db	'drive a: x:',0
+		ld	de,(fcb_a_p)
+		call	format_fn
+		call	put_msg_hl
+		call	put_msg
+		db	13,10,'drive b: ',0
+		ld	hl,(fcb_b_open_p)
+		bit	0,(hl)
+		jr	z,stat_detached
+		call	put_msg
+		db	'x:',0
+		ld	de,(fcb_b_p)
+		call	format_fn
+		call	put_msg_hl
+		jp	put_crlf
+stat_detached:	call	put_msg
+		db	'no image',13,10,0
+		ret
+;
+; check for dir command
+;
+check_dir:	ld	de,cmd_data
+		ld	hl,kw_dir
+		call	check_kw
+		jp	nz,ill_cmd
+;
+; dir  command
+;
+		ld	hl,fcb_source
+		call	parse_fn
+		jr	c,dir_err
+		ld	a,(fcb_source+1)
+		cp	' '
+		jr	nz,dir_err
+		ld	a,(fcb_source+9)
+		cp	' '
+		jr	z,dir_ok
+dir_err:	call	put_msg
+		db	'drive expected',13,10,0
+		ret
+dir_ok:		ld	a,(de)
+		or	a
+		jp	nz,extra_params
+		ld	a,(fcb_source)
+		cp	'X'-'A'+1
+		ld	hl,bdos
+		jr	nz,dir_set_bdos
+		ld	a,1
+		ld	(fcb_source),a
+		ld	hl,tnylpo_bdos
+dir_set_bdos:	ld	(src_bdos_p),hl
+		ld	hl,fcb_source+1
+		ld	b,11
+dir_wildcard:	ld	(hl),'?'
+		inc	hl
+		djnz	dir_wildcard
+		ld	a,0
+		ld	(in_line),a
+		ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	source_bdos
+		ld	de,fcb_source
+		ld	c,bdos_sfirst
+		call	source_bdos
+		cp	255
+		jr	nz,dir_found
+		call	put_msg
+		db	'no files',13,10,0
+		ret
+dir_found:	push	af
+		ld	a,(in_line)
+		or	a
+		jr	z,dir_no_blank
+		ld	a,' '
+		call	put_char
+dir_no_blank:	pop	af
+		add	a,a
+		add	a,a
+		add	a,a
+		add	a,a
+		add	a,a
+		ld	e,a
+		ld	d,0
+		ld	hl,sector_buffer
+		add	hl,de
+		ex	de,hl
+		call	format_fn
+;
+; display file name, padded to 12 characters
+;
+		ld	b,12
+dir_show:	ld	a,(hl)
+		or	a
+		jr	z,dir_pad
+		push	bc
+		push	hl
+		call	put_char
+		pop	hl
+		pop	bc	
+		inc	hl
+		djnz	dir_show
+		jr	dir_no_pad
+dir_pad:	ld	a,' '
+		push	bc
+		call	put_char
+		pop	bc
+		djnz	dir_pad
+dir_no_pad:	ld	a,(in_line)
+		inc	a
+		cp	6
+		jr	c,dir_no_crlf
+		call	put_crlf
+		xor	a
+dir_no_crlf:	ld	(in_line),a
+		ld	c,bdos_snext
+		call	source_bdos
+		cp	255
+		jr	nz,dir_found
+		ld	a,(in_line)
+		or	a
+		ret	z
+		jp	put_crlf
+;
+; unknown command
+;
+ill_cmd:	call	put_msg
+		db	'unknown command (try help)',13,10,0
+		ret
+
+;
+; checks if the buffer pointed to by DE starts with the keyword pointed
+; to by HL; the first byte of the keyword is the length of the keyword.
+; The keyword in the buffer must be followed by a space or terminator, and
+; the space is skipped if present. Returns with zero set if there is a match
+;
+check_kw:	ld	b,(hl)
+		inc	hl
+kw1:		ld	a,(de)
+		cp	(hl)
+		ret	nz
+		inc	de
+		inc	hl
+		djnz	kw1
+		ld	a,(de)
+		or	a
+		ret	z
+		cp	' '
+		ret	nz
+		inc	de
+		ret
+
+kw_copy:	db	4,'COPY'
+kw_halt:	db	4,'HALT'
+kw_change:	db	6,'CHANGE'
+kw_eject:	db	5,'EJECT'
+kw_help:	db	4,'HELP'
+kw_status:	db	6,'STATUS'
+kw_dir:		db	3,'DIR'
+
+
+;
+; complain about extra parameters on command line
+;
+extra_params:	call	put_msg
+		db	'too many parameters',13,10,0
+		ret
+
+
+;
+; create a zero terminated displayable file name from an FCB pointed to
+; by HL; uses a static buffer and returns a string pointer in HL
+;
+format_fn:	ld 	hl,fn_buffer
+		inc	de
+		ld	b,8
+		call	ffn_part
+		ld	a,(de)
+		cp	' '
+		jr	z,ffn_skip_dot
+		ld	(hl),'.'
+		inc	hl
+		ld	b,3
+		call	ffn_part
+ffn_skip_dot:	ld	(hl),0
+		ld	hl,fn_buffer
+		ret
+ffn_part:	ld	a,(de)
+		inc	de
+		and	7fh
+		cp	' '
+		jr	z,ffn_skip_space
+		cp	'A'
+		jr	c,ffn_no_upper
+		cp	'Z'+1
+		jr	nc,ffn_no_upper
+		xor	'a'-'A'
+ffn_no_upper:	ld	(hl),a
+		inc	hl
+ffn_skip_space:	djnz	ffn_part
+		ret
+
+
+;
+; initializes the FCB pointed to by HL using the string pointed to by DE;
+; DE is updated. Valid drives may be A:, B:, and X:; at least one of
+; drive, name, and extension must be specified. Sets carry on encounting
+; an error
+;
+parse_fn:	ld	a,(de)
+		or	a
+		scf
+		ret	z
+		push	hl
+;
+; initializes a 36 byte FCB
+;
+		ld	(hl),0
+		inc	hl
+		ld	a,' '
+		ld	b,11
+pfn_space:	ld	(hl),a
+		inc	hl
+		djnz	pfn_space
+		xor	a
+		ld	b,24
+pfn_zero:	ld	(hl),a
+		inc	hl
+		djnz	pfn_zero
+		pop	hl
+;
+; tries to parse drive letter
+;
+		ld	a,(de)
+		cp	'X'
+		jr	z,pfn_maybe
+		cp	'A'
+		jr	z,pfn_maybe
+		cp	'B'
+		jr	nz,pfn_no_drive
+pfn_maybe:	ld	c,a
+		inc	de
+		ld	a,(de)
+		cp	':'
+		jr	z,pfn_drive
+		dec	de
+		jr	pfn_no_drive
+pfn_drive:	inc	de
+		ld	a,c
+		sub	'A'-1
+		ld	(hl),a
+;
+; tries to parse the file name
+;
+pfn_no_drive:	inc	hl
+		ld	b,8
+pfn_fn_char:	ld	a,(de)
+		call	pfn_is_legal
+		jr	c,pfn_fn_end
+		ld	(hl),a
+		inc	de
+pfn_fn_end:	inc	hl
+		djnz	pfn_fn_char
+;
+; tries to parse the file extension
+;
+		ld	a,(de)
+		cp	'.'
+		jr	nz,pfn_no_ext
+		inc	de
+		ld	b,3
+pfn_ext_char:	ld	a,(de)
+		call	pfn_is_legal
+		jr	c,pfn_ext_end
+		ld	(hl),a
+		inc	de
+pfn_ext_end:	inc	hl
+		djnz	pfn_ext_char
+;
+; only a space or a terminator may follow; a following space is consumed
+;
+pfn_no_ext:	ld	a,(de)
+		or	a
+		ret	z
+		cp	' '
+		scf
+		ret	nz
+		inc	de
+		or	a
+		ret
+;
+; check if character in A is a legal CP/M filename character; sets carry if not
+;
+pfn_is_legal:	cp	'#'
+		ret	z
+		cp	'$'
+		ret	z
+		cp	'-'
+		ret	z
+		cp	'@'
+		ret	z
+		cp	'0'
+		ret	c
+		cp	'9'+1
+		ccf
+		ret	nc
+		cp	'A'
+		ret	c
+		cp	'Z'+1
+		ccf
+		ret
+
+
+;
+; call the BDOS whose address is stored in src_bdos_p
+;
+source_bdos:	ld	hl,(src_bdos_p)
+		jp	(hl)
+
+
+;
+; call the BDOS whose address is stored in tgt_bdos_p
+;
+target_bdos:	ld	hl,(tgt_bdos_p)
+		jp	(hl)
+
+
+;
+; close image file for drive A
+;
+close_fcb_a:	ld	de,(fcb_a_p)
+		ld	c,bdos_close
+		call	tnylpo_bdos
+		or	a
+		inc	a
+		ret	nz
+		call	put_msg
+		db	'cannot close disk image A',13,10,0
+		scf
+		ret
+		
+;
+; close image file for drive B (if it is open)
+;
+close_fcb_b:	ld	hl,(fcb_b_open_p)
+		ld	a,(hl)
+		or	a
+		ret	z
+		ld	(hl),0
+		ld	de,(fcb_b_p)
+		ld	c,bdos_close
+		call	tnylpo_bdos
+		or	a
+		inc	a
+		ret	nz
+		call	put_msg
+		db	'cannot close disk image B',13,10,0
+		scf
+		ret
+		
+;
+; command line buffer
+;
+cmd_buffer:	db	127
+cmd_length:	ds	1
+cmd_data:	ds	128
+;
+; pointers to data in the BIOS area
+;
+fcb_a_p:	ds	2
+fcb_b_p:	ds	2
+fcb_b_open_p:	ds	2
+;
+; BDOS call vectors for copy and dir
+;
+src_bdos_p:	ds	2
+tgt_bdos_p:	ds	2
+;
+; counter for dir output formatting
+;
+in_line:	ds	1
+;
+; buffer for file name formatting
+;
+fn_buffer:	ds	13
+;
+; sector buffer for copy and dir
+;
+sector_buffer:	ds	128
+;
+; FCBs for the first and second file/drive specification in a command
+;
+fcb_source:	ds	36
+fcb_target:	ds	36
+;
+; flags to keep track of open files
+;
+source_open:	ds	1
+target_open:	ds	1
+;
+; stack area
+;
+stack_top	equ	$+16*2
+
+		end	start
