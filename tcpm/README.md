@@ -8,7 +8,8 @@ While character I/O (console, printer, paper tape punch, and paper
 tape reader) calls are simply passed through to `tnylpo`, the disk specific
 BIOS calls (which are just dummies under `tnylpo`) are implemented using disk
 image files, which are accessed via the BDOS implementation of `tnylpo`.
-In this way, `tcpm` supports two disk drives with a capacity of 1 MB each.
+In this way, `tcpm` supports two disk drives with a capacity of 1 megabyte
+each.
 
 `tcpm` is accompanied by two companion programs, `tcpm_disk` and `sysutil`.
 `tcpm_disk` is a program running under the host operating system of `tynlpo`
