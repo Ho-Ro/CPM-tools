@@ -153,7 +153,7 @@ CP/M environment.
 
 The command
 ```
-A> sysutil dir x:
+A>sysutil dir x:
 ```
 will show you the contents of of the `x:` directory (or rather the
 files conforming to the file name restrictions of `tnylpo` residing there).
