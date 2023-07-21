@@ -1,4 +1,5 @@
 # tcpm &mdash; runs CP/M 2 under tnylpo
+
 ## What is this?
 `tcpm` is  a CP/M (well, sort of &mdash; it needs to be run under `tnylpo`)
 program which implements a full CP/M 2 (C)BIOS and thereby allows the actual
@@ -18,6 +19,7 @@ is a CP/M executable which allows file transfers into and out of the
 `tcpm` disk images, dynamic swapping of disk images (i.e., the equivalent
 of swapping floppy disks in a real CP/M system), and exiting the `tcpm`
 environment.
+
 ## How do I get `tcpm` resp. CP/M running?
 Unfortunately, this is not completely straightforward, since some
 components needed (above all, CP/M itself) are not free software, so I
@@ -26,8 +28,8 @@ cannot provide you with a turnkey solution.
 You'll need
 * a working installation of `tnylpo`
 * a C compiler on your host operating system (to compile `tcpm_disk`)
-* an system image of CP/M 2 (i.e., a file containing the CCP and BDOS
-binaries, e.g. `CPMnn.COM` file resulting from a
+* a system image of CP/M 2 (i.e., a file containing the CCP and BDOS
+binaries, e.g. a `CPMnn.COM` file resulting from a
 `MOVCPM nn * / SAVE 34 CPMnn.COM` operation)
 * the memory size in kilobytes for which this system image has been created
 (possible values are 20 to 64, and if you have a `CPMnn.COM`file, this
@@ -57,7 +59,7 @@ tnylpo l80 sysutil/n,sysutil/e
 Some shells require you to use `\=` instead of `=` in the `tnylpo m80` line.
 
 Create a system disk image for disk A. This assumes that you have a system
-image called `cpm62.com` which was created by `MOVCPM`/`SAVE`, see above;
+image called `cpm62.com`, which was created by `MOVCPM`/`SAVE`, see above;
 the name of the disk image must be acceptable for `tnylpo` (8.3, only
 lower case letters), and `diska.dta` is the default value assumed by `tcpm`:
 ```sh
@@ -127,12 +129,13 @@ by `tcpm_disk` during image initialization. To exit CP/M (and `tnylpo`), type:
 A>sysutil halt
 bye
 ```
+
 ## How do I populate a disk image with files?
-`sysutil` provides the copy subcommand to transfer files into (and out of)
-a `tcpm` disk image. A special drive designation `x:` allows you to
+`sysutil` provides the `copy` subcommand to transfer files into (and out of)
+a `tcpm` disk image. The special drive designation `x:` allows you to
 access files in the directory `tnylpo` uses as its drive A (by default, this
-is the current working directory at the time you started `tnylpo tcpm`. Since
-the files are accessed using ithe BDOS emulation of `tnylpo`, only files
+is the current working directory at the time you started `tnylpo tcpm`). Since
+the files are accessed using the BDOS emulation of `tnylpo`, only files
 conforming to `tnylpo`'s file name restrictions (8.3, only lower case
 letters) are accessible. To copy e.g., `pip.com` and `stat.com` into
 disk image A (assuming they already reside in the directory `tnylpo` uses
@@ -159,6 +162,7 @@ A> sysutil dir x:
 ```
 will show you the contents of of the `x:` directory (or rather the
 files conforming to the file name restrictions of `tnylpo` residing there).
+
 ## How do I change or detach disk images?
 Again, this is done using `sysutil`. The `change` subcommand allows you to
 attach a new disk image to drive A or B, implicitly detaching the currently
@@ -184,6 +188,7 @@ drive b: no image
 
 A>
 ```
+
 ## What is the format of the disk images?
 `tcpm` disk images consist of 8192 records of 128 bytes and therefore have
 a total capacity of one megabyte. Logically, they are structured into 128
@@ -196,7 +201,8 @@ in sectors 2 to 45 of the first track) or `DD` for a data disk image (which
 may be attached to drive B only). Disk images may be converted from system
 to data disk images and vice versa using the `sys` and `nosys` subcommands of
 `tcpm_disk`. Sectors 46 to 64 the first track of a system disk image and
-sectors 2 to 64 of a data disk image (and bytes 3 to 128 of the first sector
+sectors 2 to 64 of the first track of a data disk image
+(as well as bytes 3 to 128 of the first sector
 on the first track) are not used in any way (resp. are reserved for malware).
 
 The second track contains 64 directoy records of 4 directory entries each,
@@ -219,15 +225,16 @@ option) on creating a disk image. If you need to allocate the full megabyte of
 a disk image (e.g., if you need to run a program which uses direct BIOS calls
 to do its own data management), you can request this with the `-a` option
 during image creation.
+
 ## What is a CP/M 2 system image?
 This is a file containing (at least) the binary code for the CP/M 2
 Console Command Processor (CCP) and Basic Disk Operating System (BDOS)
 for a specific memory configuration (20 kilobytes at minimum and
 64 kilobytes at maximum, putting the
 start of the CCP to location 3400h resp. 0e400h at runtime);
-additionally, system images sometimes contain the code of a boot loader and
-the Basic Input/Output System (BIOS) as well, but in the `tcpm` environment,
-these are not required (resp. supplied by `tcpm`). The CCP is
+additionally, system images may contain the code of a boot loader and
+of the Basic Input/Output System (BIOS) as well, but in the `tcpm`
+environment, these are not required (resp. supplied by `tcpm`). The CCP is
 exactly 2048 bytes in size, and the BDOS 3584 bytes.
 A raw system image starts with the CCP code, followed by the BDOS code
 (and optionally, the BIOS code), while a `MOVCPM` system image (e.g.,
