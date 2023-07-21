@@ -91,15 +91,15 @@ Assemble and link `tcpm.com` using `tnylpo` and `m80.com`/`l80.com`:
 tnylpo m80 =tcpm
 tnylpo l80 tcpm/n,tcpm/e
 ```
-(Again, you may have to change `=`to `\=`.)
+(Again, you may have to change `=` to `\=`.)
 
 Now you should be able to boot CP/M:
 ```sh
 tnylpo tcpm
 ```
-If you chose to use other image name than `diska.dta` (and `diskb.dta`),
-e.g., `tom.dsk` (and `jerry.dsk`), you will have to supply it on the
-`tcpm`command line:
+If you chose to use an image name other than `diska.dta` (resp.
+`diskb.dta`), e.g., `tom.dsk` (resp. `jerry.dsk`), you will have
+to supply it on the `tcpm`command line:
 ```sh
 tnylpo tcpm tom.dsk jerry.dsk
 ```
