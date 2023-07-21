@@ -2,7 +2,7 @@
 ## What is this?
 `tcpm` is  a CP/M (well, sort of &mdash; it needs to be run under `tnylpo`)
 program which implements a full CP/M 2 (C)BIOS and thereby allows the actual
-DRI CP/M 2 operating system (CCP and BDOS) to execute under tnylpo.
+DRI CP/M 2 operating system (CCP and BDOS) to execute under `tnylpo`.
 
 While character I/O (console, printer, paper tape punch, and paper
 tape reader) calls are simply passed through to `tnylpo`, the disk specific
