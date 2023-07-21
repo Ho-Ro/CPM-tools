@@ -232,8 +232,8 @@ of the Basic Input/Output System (BIOS) as well, but in the `tcpm`
 environment, these are not required (resp. supplied by `tcpm`). The CCP is
 exactly 2048 bytes in size, and the BDOS 3584 bytes.
 A raw system image starts with the CCP code, followed by the BDOS code
-(and optionally, the BIOS code), while a `MOVCPM` system image (e.g.,
-created by the CP/M command sequence
+(and optionally, the BIOS code), while a `MOVCPM` system image created
+e.g., by the CP/M command sequence
 ```
 A>movcpm 64 *
 A>save 34 cpm64.com
