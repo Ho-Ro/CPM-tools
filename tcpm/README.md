@@ -77,7 +77,7 @@ Edit `tcpm.mac`with your favourite text editor (`vi`, right?). Please take
 note that this file follows the CP/M (resp. MS-DOS) style line end convention
  (`<cr>`/`<lf>`), so if your text editor isn't able to handle this, you will
 have to use `tnylpo_convert` to convert it before and after editing:
-````sh
+```sh
 tnylpo_convert -c tcpm.mac -u tcpm.mac
 vi tcpm.mac
 tnylpo_convert -u tcpm.mac -c tcpm.mac
