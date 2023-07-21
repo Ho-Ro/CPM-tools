@@ -1,0 +1,695 @@
+;
+; Copyright (c) 2023 Georg Brein. All rights reserved.
+;
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice,
+;    this list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright
+;    notice, this list of conditions and the following disclaimer in the
+;    documentation and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+; ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+; LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+; CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+; SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+; CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+; ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+; POSSIBILITY OF SUCH DAMAGE.
+;
+
+
+;
+; tcpm - a utility to run actual CP/M 2 under tnylpo
+;
+; tcpm uses tnylpo's BDOS and BIOS emulation to implement a CP/M 2 CBIOS
+; using disk images instead of real disk drives. After initializing the
+; CBIOS, tcpm loads the CP/M CCP and BDOS from the system track of the
+; disk image attached to drive A and passes them contol of the emulated
+; machine. tcpm supports only two disk drives (A and B), which can be changed
+; dynamically using the CP/M program sysutil.com, which also allows file
+; transfers into and out of tcpm's disk images. Character I/O is handled
+; directly by tnylpo's BIOS emulation. Disk image files may be prepared
+; by the companion Unix program tcpm_disk. 
+;
+
+
+		.z80
+
+
+;
+; The parameter sys_size_kb defines the available memory in kilobytes and
+; determines the expected position of CP/M (CCP + BDOS) in main memory.
+; Valid settings are in the range from 20 to 64.
+; Before assembly, this has to be set to match the configuration of the
+; CP/M image to be used.
+;
+; E.g., if your CP/M image has been created by
+; 	MOVCPM 60 *
+;	SAVE 34 CPM60.COM
+; and your disk image has been initialized by
+;	tcpm_disk -m cpm60.com -p sysutil.com create diska.dta
+; you should set sys_size_kb to 60 before assembing and linking tcpm.
+; Then you should be able to start your CP/M session with the command
+;	tnylpo tcpm diska.dta
+;
+sys_size_kb	equ	62
+;
+; offset of the system in relation to 20 KB CP/M 2
+;
+sys_bias	equ	(sys_size_kb-20)*1024
+;
+; start addresses of CCP, BDOS, and BIOS
+;
+ccp		equ	3400h+sys_bias
+bdos		equ	3c00h+sys_bias
+bios		equ	4a00h+sys_bias
+;
+; entry address of BDOS (the first six bytes are the serial number)
+;
+bdos_entry	equ	bdos+6
+;
+; length of CCP + BDOS in 128 byte records
+;
+system_records	equ	(4a00h-3400h)/128
+;
+; "magic addresses" for tnylpo's BDOS and BIOS emulation
+;
+tnylpo_bdos	equ	0ffffh-18	; tnylpo BDOS entry
+tnylpo_const	equ	0ffffh-15	; tnylpo CONST
+tnylpo_conin	equ	0ffffh-14	; tnylpo CONIN
+tnylpo_conout	equ	0ffffh-13	; tnylpo CONOUT
+tnylpo_list	equ	0ffffh-12	; tnylpo LIST
+tnylpo_punch	equ	0ffffh-11	; tnylpo PUNCH
+tnylpo_reader	equ	0ffffh-10	; tnylpo READER
+tnylpo_listst	equ	0ffffh-2	; tnylpo LISTST
+tnylpo_delay	equ	0ffffh-0	; tnylpo delay entry
+;
+; CP/M zero page locations
+;
+local_bdos	equ	5
+default_fcb_1	equ	5ch
+default_fcb_2	equ	6ch
+iobyte		equ	3
+drive_user	equ	4
+;
+; tnylpo BDOS emulation functions used by the BIOS
+;
+bdos_reset	equ	0
+bdos_pstring	equ	9
+bdos_open	equ	15
+bdos_rseq	equ	20
+bdos_setdma	equ	26
+bdos_rrandom	equ	33
+bdos_wrandom	equ	34
+bdos_getscb	equ	49
+
+
+		aseg
+
+		org	100h
+
+
+start:		ld	sp,100h
+;
+; check the BDOS serial number for tnylpo's serial number to ensure we
+; are running directly under tnylpo (until this is established, we cannot
+; move our BIOS into place or use tnylpo features)
+;
+		ld	hl,(local_bdos+1)
+		ld	de,0-6
+		add	hl,de
+		ld	de,tnylpo_serial
+		ld	b,6	
+sn_compare:	ld	a,(de)
+		cp	(hl)
+		jr	z,sn_match
+		ld	de,not_tnylpo_msg
+		ld	c,bdos_pstring
+		call	local_bdos
+		ld	c,bdos_reset
+		jp	local_bdos
+sn_match:	inc	de
+		inc	hl
+		djnz	sn_compare
+;
+; move the BIOS into place
+;
+		ld	de,bios
+		ld	hl,bios_data
+		ld	bc,bios_length
+		ldir
+;
+; check if a file name has been provided; if so, use the name for disk image A
+;
+		ld	a,(default_fcb_1+1)
+		cp	' '
+		jr	z,no_fcb_1
+		ld	de,fcb_a
+		ld	hl,default_fcb_1
+		ld	bc,12
+		ldir
+;
+; check if a second file name has been provided; if so, use it for disk image B
+;
+no_fcb_1:	ld	a,(default_fcb_2+1)
+		cp	' '
+		jr	z,open_a
+		ld	de,fcb_b
+		ld	hl,default_fcb_2
+		ld	bc,12
+		ldir
+		ld	a,1
+		ld	(disk_b_given),a
+;
+; open disk A image; if this fails, we cannot proceed
+;
+open_a:		ld	de,fcb_a
+		ld	c,bdos_open
+		call	tnylpo_bdos
+		inc	a
+		jr	nz,check_a
+		call	put_msg
+		db	'Cannot open image for disk A',13,10,0
+		jp	failure
+;
+; check if the image is a systemn disk image (signature 'DS'); if this
+; fails, we cannot proceed
+;
+check_a:	ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	tnylpo_bdos
+		ld	de,fcb_a
+		ld	c,bdos_rseq
+		call	tnylpo_bdos
+		or	a
+		jr	nz,no_system
+		ld	a,(sector_buffer)
+		cp	'D'
+		jr	nz,no_system
+		ld	a,(sector_buffer+1)
+		cp	'S'
+		jr	z,open_b
+no_system:	call	put_msg
+		db	'File for disk A is not a system disk image',13,10,0
+		jp	failure
+;
+; try to open disk B image; if no file name has been provided on the command
+; line, this may fail and we can proceed anyway (disk B is simply
+; unselectable until an image is loaded using the sysutil change command).
+;
+open_b:		ld	de,fcb_b
+		ld	c,bdos_open
+		call	tnylpo_bdos
+		inc	a
+		jr	z,open_b_failed
+;
+; check the image signature; the image may be either a system ('DS') or a
+; data ('DD') disk.
+;
+		ld	de,sector_buffer
+		ld	c,bdos_setdma
+		call	tnylpo_bdos
+		ld	de,fcb_b
+		ld	c,bdos_rseq
+		call	tnylpo_bdos
+		or	a
+		jr	nz,no_data
+		ld	a,(sector_buffer)
+		cp	'D'
+		jr	nz,no_data
+		ld	a,(sector_buffer+1)
+		cp	'S'
+		jr	z,open_b_ok
+		cp	'D'
+		jr	z,open_b_ok
+no_data:	call	put_msg
+		db	'File for disk B is not a disk image',13,10,0
+		jp	failure
+open_b_ok:	ld	a,1
+		ld	(fcb_b_open),a
+		jr	load_system
+open_b_failed:	ld	a,(disk_b_given)
+		or	a
+		jr	z,load_system
+		call	put_msg
+		db	'Cannot open image for disk B',13,10,0
+		jp	failure
+;
+; get CCP and BDOS from disk A
+;
+load_system:	call	read_system
+;
+; initialize I/O byte and default drive to A and set user 0 and emit
+; the sign-on message (this is usually done in the BOOT BIOS function, but
+; to conserve BIOS space, it is done here)
+;
+		xor	a
+		ld	(iobyte),a
+		ld	(drive_user),a
+		call	put_msg
+		db	sys_size_kb/10+'0'
+		db	sys_size_kb-((sys_size_kb/10)*10)+'0'
+		db	'K CP/M VERS 2.2',13,10,0
+;
+; transfer control to the cold boot entry BOOT (which in turn calls the CCP)
+;
+		jp	boot
+
+
+;
+; work fields for the above initialization code
+;
+not_tnylpo_msg: db	'need to be run under tnylpo',13,10,'$'
+tnylpo_serial:	db	0,16h,0,0c0h,0ffh,0eeh
+sector_buffer:	ds	128
+disk_b_given:	db	0
+
+
+bios_data	equ	$
+
+		.phase	bios
+
+;
+; used together with bios_next to calculate bios_length
+;
+bios_first	equ	$
+
+;
+; BIOS entry vector: 17 standard CP/M 2 entries and a tnylpo specific
+; delay subroutine 
+;
+		jp	boot
+wboot_entry:	jp	wboot
+		jp	tnylpo_const
+		jp	tnylpo_conin
+		jp	tnylpo_conout
+		jp	tnylpo_list
+		jp	tnylpo_punch
+		jp	tnylpo_reader
+		jp	home
+		jp	seldsk
+		jp	settrk
+		jp	setsec
+		jp	setdma
+		jp	read
+		jp	write
+		jp	tnylpo_listst
+		jp	sectran
+		jp	tnylpo_delay
+; 
+; this pointer allows sysutil to access the disk image FCBs and the
+; open flag for disk B (these belong to the BIOS, but can be modified by
+; sysutil).
+;
+		dw	fcb_a
+		
+
+;
+; display a message embedded in the code right after the call
+;
+put_msg:	pop	hl
+pm1:		ld	a,(hl)
+		inc	hl
+		or	a
+		jr	z,pm2
+		push	hl
+		ld	c,a
+		call	tnylpo_conout
+		pop	hl
+		jr	pm1
+pm2:		jp	(hl)
+
+
+;
+; BOOT entry
+;
+boot:		ld	sp,100h
+;
+; most first-time initializations have already been done by the loader program
+; or need to be done in WBOOT as well
+;
+		call	common_boot
+;
+; transfer control to the CCP (no check necessary)
+;
+		ld	a,(drive_user)
+		ld	c,a
+		jp	ccp
+
+;
+; WBOOT entry
+;
+wboot:		ld	sp,100h
+;
+; read CCP and BDOS from disk A
+;
+		call	read_system
+		call	common_boot
+;
+; check drive and change an invalid drive to A
+;
+		ld	hl,drive_user
+		ld	a,0fh
+		and	(hl)
+		or	a
+;
+; drive A is always valid
+;
+		jr	z,drive_ok
+;
+; drive B is only valid if it has a disk image attached
+;
+		cp	1
+		jr	nz,correct_drive
+		ld	a,(fcb_b_open)
+		or	a
+		jr	nz,drive_ok
+correct_drive:	ld	a,0f0h
+		and	(hl)
+		ld	(hl),a
+		xor	a
+;
+; pass the drive to the CCP
+;
+drive_ok:	ld	c,a
+		jp	ccp
+		
+
+;
+; things common to BOOT and WBOOT: set jumps to WBOOT and BDOS entries,
+; set DMA address to 80h
+;
+common_boot:	ld	a,0c3h	; jump
+		ld	(0),a
+		ld	(5),a
+		ld	hl,wboot_entry
+		ld	(0+1),hl
+		ld	hl,bdos_entry
+		ld	(5+1),hl
+		ld	hl,80h
+		ld	(curr_dma),hl
+		ret
+
+;
+; read CCP and BDOS from disk A (system_records records starting at
+; the second record of the disk)
+;
+read_system:	xor	a
+		ld	(curr_drive),a
+		ld	h,a
+		ld	l,a
+		ld	(curr_track),hl
+		inc	hl
+		ld	(curr_sector),hl
+		ld	a,bdos_rrandom
+		ld	(curr_func),a
+		ld	hl,ccp
+		ld	(curr_dma),hl
+rs_loop:	call	read_write
+		or	a
+		jr	nz,rs_err
+;
+; repeat until correct number of records has been read
+;
+		ld	hl,curr_sector
+		ld	a,(hl)
+		cp	system_records
+		ret	z
+;
+; increase sector number and DMA address
+;
+		inc	a
+		ld	(hl),a
+		ld	hl,(curr_dma)
+		ld	de,128
+		add	hl,de
+		ld	(curr_dma),hl
+		jr	rs_loop
+;
+; failure to load the system from disk: scream and die
+;
+rs_err:		call	put_msg
+		db	'Error reading system from disk A',13,10,0	
+failure:	ld	c,bdos_reset
+		jp	tnylpo_bdos
+
+
+;
+; HOME entry: simply selects track 0
+;
+home:		ld	hl,0
+		ld	(curr_track),hl
+		ret
+
+
+;
+; SELDSK entry: drive B is only valid if it has a disk image attached
+;
+seldsk:		ld	a,(fcb_b_open)
+		ld	b,a
+		ld	a,c
+		ld	hl,dph_a
+		or	a
+		jr	z,sel_ok
+		cp	1
+		jr	nz,sel_fail
+		bit	0,b
+		jr	z,sel_fail
+		ld	hl,dph_b
+sel_ok:		ld	(curr_drive),a
+		ret
+sel_fail:	ld	hl,0
+		ret
+		
+		
+;
+; SETTRK entry
+;
+settrk:		ld	(curr_track),bc
+		ret
+		
+
+; 
+; SETSEC entry
+;
+setsec:		ld	(curr_sector),bc
+		ret
+
+
+;
+; SETDMA entry
+;
+setdma:		ld	(curr_dma),bc
+		ret
+
+
+;
+; READ entry
+;
+read:		ld	a,bdos_rrandom
+		ld	(curr_func),a
+		jr	read_write
+
+
+;
+; WRITE entry
+;
+write:		ld	a,bdos_wrandom
+		ld	(curr_func),a
+		jr	read_write
+		
+
+;
+; common functionality of read and write
+;
+; save tnylpo's DMA address
+;
+read_write:	ld	de,scb_cb
+		ld	c,bdos_getscb
+		call	tnylpo_bdos
+		ld	(tnylpo_dma),hl
+;
+; set desired DMA address
+;
+		ld	de,(curr_dma)
+		ld	c,bdos_setdma
+		call	tnylpo_bdos
+;
+; calculate record number in disk image (track * 64 + sector)
+;
+		ld	hl,(curr_track)
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		add	hl,hl
+		ld	de,(curr_sector)
+		add	hl,de
+;
+; store record number in correct FCB and get its address
+;
+		ld	a,(curr_drive)
+		or	a
+		jr	nz,rw_drive_b
+		ld	(fcb_a+33),hl
+		ld	de,fcb_a
+		jr	rw_drive_set
+rw_drive_b:	ld	(fcb_b+33),hl
+		ld	de,fcb_b
+;
+; perform the required function (read or write)
+;
+rw_drive_set:	ld	a,(curr_func)
+		ld	c,a
+		call	tnylpo_bdos
+		push	af
+;
+; restore tnylpo's DMA address
+;
+		ld	de,(tnylpo_dma)
+		ld	c,bdos_setdma
+		call	tnylpo_bdos
+		pop	af
+		or	a
+		ret	z
+		ld	a,1
+		ret
+		
+;
+; SECTRAN entry: tcpm doesn't do any disk sector translation
+;	
+sectran:	ld	h,b
+		ld	l,c
+		ret
+
+;
+; control block for getting the current DMA address from tnylpo
+;
+scb_cb:		db	03ch
+		db	0
+
+
+;
+; FCBs for the disk image files for Disk A and B; the default image names
+; are diska.dta and diskb.dta
+;
+fcb_a:		db	1
+		db	'DISKA   DTA'
+		ds	24,0
+fcb_b:		db	1
+		db	'DISKB   DTA'
+		ds	24,0
+fcb_b_open:	db	0
+
+
+;
+; save area for the DMA address of tnylpo's bdos emulation
+;
+tnylpo_dma:	ds	2
+;
+; data for read_write:
+;	drive (0 or 1)
+;	operation (bdos_rrandom or bdos_wrandom)
+;	track (0..127)
+;	sector (0..63)
+;	DMA address
+;
+curr_drive:	ds	1
+curr_func:	ds	1
+curr_track:	ds	2
+curr_sector:	ds	2
+curr_dma:	ds	2
+
+
+;
+; CP/M disk parameters and data areas
+;
+; disk parameter headers for drive A and B
+;
+dph_a:		dw	0
+		dw	0,0,0
+		dw	dirbuf
+		dw	dpb
+		dw	csv_a
+		dw	alv_a
+dph_b:		dw	0
+		dw	0,0,0
+		dw	dirbuf
+		dw	dpb
+		dw	csv_b
+		dw	alv_b
+
+
+;
+; disk image format:
+; 128 tracks, 64 sectors/track, 128 bytes/sector --> 1 MB total
+; block size 4 KB (32 sectors/block; 2 blocks/track)
+; 1 reserved track/disk (8 KB)
+; 1 directory track (8 KB, 256 directory entries/disk)
+; 254 blocks/disk (2 directory blocks, 252 data blocks)
+; 
+disk_tracks	equ	128
+disk_sectors	equ	64
+disk_rtracks	equ	1
+disk_bls	equ	4096
+disk_entries	equ	256
+;
+; values used in the DPB
+;
+spc		equ	disk_bls/128
+dsm		equ	((disk_tracks-disk_rtracks)*disk_sectors)/spc
+cks		equ	disk_entries/4
+;
+; disk parameter block: used by both drive A and B
+;
+dpb:		dw	disk_sectors
+		db	5		; bsh
+		db	31		; blm
+		db	3		; exm
+		dw	dsm-1
+		dw	disk_entries-1
+		db	11000000b	; al0
+		db	00000000b	; al1
+		dw	cks
+		dw	disk_rtracks
+
+
+;
+; directory checksum vectors for drive A and B
+;
+csv_a:		ds	cks,0
+csv_b:		ds	cks,0
+;
+; allocation vectors for drive A and B
+;
+alv_a:		ds	(dsm+7)/8,0
+alv_b:		ds	(dsm+7)/8,0
+dirbuf:		ds	128,0
+
+
+;
+; first byte after the BIOS
+;
+bios_next	equ	$
+
+		.dephase
+
+;
+; length of the BIOS
+;
+bios_length	equ	bios_next-bios_first
+
+
+		end
