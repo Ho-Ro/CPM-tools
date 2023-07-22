@@ -60,7 +60,7 @@ tnylpo l80 sysutil/n,sysutil/e
 Some shells require you to use `\=` instead of `=` in the `tnylpo m80` line.
 
 Create a system disk image for disk A. This example assumes that you have a
-CP/M 2 system image called `cpm62.com`, which was created by `MOVCPM`/`SAVE`,
+CP/M 2 system image called `cpm62.com`, which was created by `MOVCPM`/`SAVE`
 (see below);
 the name of the new disk image must be acceptable for `tnylpo` (8.3, only
 lower case letters), and `diska.dta` is the default value assumed by `tcpm`:
