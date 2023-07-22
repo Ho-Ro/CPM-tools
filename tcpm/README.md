@@ -195,7 +195,7 @@ bytes, either `DS` for a system disk image (containing CCP and BDOS binaries
 in sectors 2 to 45 of the first track) or `DD` for a data disk image (which
 may be attached to drive B only). Disk images may be converted from system
 to data disk images and vice versa using the `sys` and `nosys` subcommands of
-`tcpm_disk`. Sectors 46 to 64 the first track of a system disk image and
+`tcpm_disk`. Sectors 46 to 64 of the first track of a system disk image and
 sectors 2 to 64 of the first track of a data disk image
 (as well as bytes 3 to 128 of the first sector
 on the first track) are not used in any way (resp. are reserved for malware).
