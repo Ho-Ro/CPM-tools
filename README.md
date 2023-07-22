@@ -9,7 +9,8 @@ Rocky Linux 9.1; Slackware 14.2 i386),
 FreeBSD (12.0 amd64; 13.0 i386), NetBSD (8.0 i386, sparc, vax;
 9.2 amd64, sparc64, i386), OpenBSD (6.4, 6.7, 6.9 i386),
 Solaris (7 sparc; 9 sparc, i386; 10 i386, amd64),
-and Mac OS X (10.5 powerpc; 10.6; 10.9; 10.11; 10.13; 11, 12, 13 amd64, arm64),
+and Mac OS X (10.5 powerpc; 10.6; 10.7; 10.9; 10.11; 10.13; 11, 12,
+13 amd64, arm64),
 but should need little to no modifications to run under any other
 reasonably recent system. The companion program `tnylpo-convert`
 converts text files to and from the CP/M format.
