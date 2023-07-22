@@ -31,12 +31,12 @@ You'll need
 * a system image of CP/M 2 (i.e., a file containing the CCP and BDOS
 binaries, see below)
 * the memory size in kilobytes for which this system image has been created
-(possible values are 20 to 64, and if you have a `CPMnn.COM`file, this
+(possible values are 20 to 64, and if you have a `CPMnn.COM` file, this
 value usually corresponds to the `nn` part of the file name; if you have a
 file called `CPM62.COM`, the memory size should be 62 kilobytes)
 * Microsoft's Utility Software Package or rather the Macro-80/Link-80
 assembler and linker (`m80.com` and `l80.com`) from this package (to
-assemble and link `tcpm`and `sysutil`)
+assemble and link `tcpm` and `sysutil`)
 * (optional) the utility programs from the CP/M 2 distribution like `pip.com`,
 `stat.com`, or `movcpm.com` (this you will need if you want to change the
 memory size of your CP/M system image later on)
@@ -78,7 +78,7 @@ own name, but `diskb.dta` is the default):
 ```
 This will create a non-bootable disk image with an empty directory.
 
-Edit `tcpm.mac`with your favourite text editor (`vi`, right?). Change
+Edit `tcpm.mac` with your favourite text editor (`vi`, right?). Change
 the definition of the symbol `sys_size_kb` near the top of the file to your
 memory size in kilobytes (`62` in our example).
 
@@ -97,7 +97,7 @@ tnylpo tcpm
 ```
 If you chose to use an image name other than `diska.dta` (resp.
 `diskb.dta`), e.g., `tom.dsk` (resp. `jerry.dsk`), you will have
-to supply it on the `tcpm`command line:
+to supply it on the `tcpm` command line:
 ```sh
 tnylpo tcpm tom.dsk jerry.dsk
 ```
@@ -112,7 +112,7 @@ CP/M should now start up and show you something like:
 
 A>
 ```
-You can now enter CP/M commands like 'dir':
+You can now enter CP/M commands like `dir`:
 ```
 A>dir
 A: SYSUTIL  COM
@@ -263,7 +263,7 @@ CONOUT BIOS entry).
 
 Programs running in the `tcpm` environment can thus use the `tnylpo` BDOS
 and BIOS emulation (at the price of no longer being conforming CP/M programs)
-&mdash; this is in fact how `sysutil` (and the `tcpm` BIOS itself) access external
+&mdash; this is in fact how `sysutil` and the `tcpm` BIOS access external
 files and disk images. If you plan to do this, keep the following
 caveats in mind:
 * don't use `Reset Disk System` (13) or `Select Disk` (14),
@@ -283,6 +283,6 @@ language code again, and I needed to check a compatibility issue
 between CP/M 2 and `tnylpo` and still have no access to a real CP/M 2
 computer (using one of the many competing CP/M emulators was naturally
 no option).
-## What is the legal situation of this software?
+## What is the legal situation?
 `tcpm`, `tcpm_disk` and `sysutil` were written by Georg Brein
 (`tnylpo@gmx.at`) and are subject to the same BSD-style license as `tnylpo`.
