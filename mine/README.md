@@ -1,4 +1,4 @@
-# mine - get rid of those nasty mines!
+# mine &mdash; get rid of those nasty mines!
 ## What is this?
 `mine` is a simple text-based implementation of the ubiquitous
 `minesweeper` game. It is included in `tnylpo` as an unencumbered
