@@ -29,8 +29,7 @@ You'll need
 * a working installation of `tnylpo`
 * a C compiler on your host operating system (to compile `tcpm_disk`)
 * a system image of CP/M 2 (i.e., a file containing the CCP and BDOS
-binaries, e.g. a `CPMnn.COM` file resulting from a
-`MOVCPM nn * / SAVE 34 CPMnn.COM` operation)
+binaries, see below)
 * the memory size in kilobytes for which this system image has been created
 (possible values are 20 to 64, and if you have a `CPMnn.COM`file, this
 value usually corresponds to the `nn` part of the file name; if you have a
@@ -60,9 +59,10 @@ tnylpo l80 sysutil/n,sysutil/e
 ```
 Some shells require you to use `\=` instead of `=` in the `tnylpo m80` line.
 
-Create a system disk image for disk A. This assumes that you have a system
-image called `cpm62.com`, which was created by `MOVCPM`/`SAVE`, see above;
-the name of the disk image must be acceptable for `tnylpo` (8.3, only
+Create a system disk image for disk A. This example assumes that you have a
+CP/M 2 system image called `cpm62.com`, which was created by `MOVCPM`/`SAVE`,
+(see below);
+the name of the new disk image must be acceptable for `tnylpo` (8.3, only
 lower case letters), and `diska.dta` is the default value assumed by `tcpm`:
 ```sh
 ./tcpm_disk -m cpm62.com -p sysutil.com create diska.dta
