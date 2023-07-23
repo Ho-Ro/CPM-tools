@@ -265,13 +265,13 @@ and BIOS emulation (at the price of no longer being conforming CP/M programs)
 &mdash; this is in fact how `sysutil` and the `tcpm` BIOS itself access
 external files and disk images.
 Of course, `tnylpo` system services no longer can be activated by
-calling location 5 (or by using the addressin location 1 to access the BIOS
+calling location 5 (or by using the address in location 1 to access the BIOS
 jump vector), since this now belongs to CP/M. Instead, the 'magic'
 `ret` instructions need to be called directly, e.g., `call 0ffffh-18` will
 activate the BDOS emulation (likewise, `call 0ffffh-13` will call the emulated
 CONOUT BIOS entry).
 
-If you plan to call the `tnylpo` interface in your programs, keep the
+If you plan to call the `tnylpo` interface from your programs, keep the
 following caveats in mind:
 * don't use `Reset Disk System` (BDOS 13) or `Select Disk` (BDOS 14),
 since these modify the drive number in location 4 which now belongs to CP/M.
