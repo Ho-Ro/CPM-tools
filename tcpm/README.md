@@ -243,46 +243,56 @@ offsets 1080h to 1e7fh. `tcpm_disk` supports both variants with its
 `-s` resp. `-m` options (if your system images uses some other layout,
 you will have to extract the CCP and BDOS parts using the `dd` command,
 effectively creating a raw system image).
-## How does CP/M (resp. `tcpm`) interact with `tnylpo`?
+
+## How does CP/M (resp. how does `tcpm`) interact with `tnylpo`?
 `tnylpo` doesn't care too much about what happens with the data
 structures it stored in the memory of the virtual machine; most of them are
 just initialized before program startup for the benefit of the application
 program (to supply it with a CP/M compatible environment) and are never
-referenced by `tnylpo` itself (e.g., the allocation
-vector, disk parameter block, or the BIOS jump vector). Depending on the memory
-size configured into `tcpm`, these will be overwritten by the BIOS installed
-at startup. What needs to be preserved are just the `ret` instructions
-in the topmost 19 bytes of main memory, since the emulated system
-calls (on which the `tcpm` BIOS depends) are activated by executing them.
+referenced by `tnylpo` itself (e.g., the jump to the BDOS in location 5,
+the allocation vector, the disk parameter block, or the BIOS jump vector).
+What usually needs to be preserved are the `ret` instructions in the topmost
+19 bytes of main memory, since the system calls emulated by `tnylpo` are
+activated by executing them.
 
-Of course, `tnylpo` system services no longer can be activated by e.g.,
-calling location 5, since this now belongs to CP/M. Instead, the 'magic'
+In the current implementation, the BIOS installed by `tcpm` is small enough
+that it can coexist with `tnylpo`'s minimal BDOS and BIOS areas even if the
+maximal CP/M memory configuration (64 kilobytes) is in use, but this may
+change if the `tcpm` BIOS grows in a future version. 
+
+User programs running in the `tcpm` environment can use the `tnylpo` BDOS
+and BIOS emulation (at the price of no longer being conforming CP/M programs)
+&mdash; this is in fact how `sysutil` and the `tcpm` BIOS itself access
+external files and disk images.
+Of course, `tnylpo` system services no longer can be activated by
+calling location 5 (or by using the addressin location 1 to access the BIOS
+jump vector), since this now belongs to CP/M. Instead, the 'magic'
 `ret` instructions need to be called directly, e.g., `call 0ffffh-18` will
 activate the BDOS emulation (likewise, `call 0ffffh-13` will call the emulated
 CONOUT BIOS entry).
 
-Programs running in the `tcpm` environment can thus use the `tnylpo` BDOS
-and BIOS emulation (at the price of no longer being conforming CP/M programs)
-&mdash; this is in fact how `sysutil` and the `tcpm` BIOS access external
-files and disk images. If you plan to do this, keep the following
-caveats in mind:
-* don't use `Reset Disk System` (13) or `Select Disk` (14),
+If you plan to call the `tnylpo` interface in your programs, keep the
+following caveats in mind:
+* don't use `Reset Disk System` (BDOS 13) or `Select Disk` (BDOS 14),
 since these modify the drive number in location 4 which now belongs to CP/M.
-* likewise, don't use `Get I/O Byte` (7) or `Set I/O Byte` (8), since they
-access the I/O byte in localtion 3, which now belongs to CP/M (but since
-the `tcpm` environment ignores the I/O byte anyway, this doesn't really
-matter).
-* be careful when calling `System Reset` (0), because this will terminate
-`tnylpo` and implicitly the `tcpm` environment.
-* don't use `Get Addr(Alloc)` (27) or `Get Addr(Diskparams)` (31), since
-they might return pointers to data already overwritten by the
-`tcpm` BIOS.
+* likewise, don't use `Get I/O Byte` (BDOS 7) or `Set I/O Byte` (BDOS 8),
+since they access the I/O byte in location 3, which now belongs to CP/M
+(but since the `tcpm` BIOS ignores the I/O byte anyway, this doesn't
+really matter).
+* calling `System Reset` (BDOS 0) (or jumping to location 0ffffh-16 to
+activate the BIOS WBOOT entry) will terminate `tnylpo` and thus implicitly
+the `tcpm` environment.
+* avoid using `Get Addr(Alloc)` (BDOS 27) or `Get Addr(Diskparams)` (BDOS 31),
+since they return pointers to data in the `tnylpo` BIOS area, which in future
+releases of `tcpm` might have been overwritten by an enlarged `tcpm` BIOS.
+
 ## Who needs this?
 Admittedly, hardly anybody. But it was fun to write some Z80 assembly
 language code again, and I needed to check a compatibility issue
 between CP/M 2 and `tnylpo` and still have no access to a real CP/M 2
 computer (using one of the many competing CP/M emulators was naturally
 no option).
+
 ## What is the legal situation?
 `tcpm`, `tcpm_disk` and `sysutil` were written by Georg Brein
 (`tnylpo@gmx.at`) and are subject to the same BSD-style license as `tnylpo`.
