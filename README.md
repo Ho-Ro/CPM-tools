@@ -179,6 +179,11 @@ you can easily add `tnylpo` to your system by issuing the command
 OpenBSD added `tnylpo` to its package collection
 after its OpenBSD 6.8 release, so users of 6.8-current (or later) may
 install `tnylpo` with the command `pkg_add tnylpo`.
+
+[MacPorts](https://www.macports.org) provides a `tnylpo` package for
+MacOS users. If you have MacPorts installed, you can add `tnylpo` to your
+system by typing `sudo port install tnylpo` in a terminal window.
+
 ## I don't want to read 1000+ lines just to run a program!
 All CP/M program and data file names are expected in lower case;
 files called `TURBO.COM`, `M80.COM`, or `PGRM.MAC` need to be
