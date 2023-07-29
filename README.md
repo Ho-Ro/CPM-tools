@@ -96,7 +96,7 @@ reported as working:
 * Microsoft Macro-80/Link-80 3.44
 * Microsoft Basic-85 5.29
 * Microsoft Fortran-80 3.44
-* MicroPro WordStar 3.30 *(1)*
+* MicroPro WordStar 3.30 and 4.0 *(1)*
 * Ashton-Tate dBase II 2.41 *(1, 2)*
 * Digital Research PL/I-80 1.3 and 1.4
 * Digital Research MAC 2.0 *(2)*, RMAC 1.1, LINK 1.3 and 1.31, LIB 1.1, XREF 1.3
@@ -118,6 +118,8 @@ reported as working:
 * HiSoft Devpac80 v2 *(1, 2)*
 * SLR Systems Z80ASM 1.32, SLRNK 1.31, Z80DIS 1.2
 * MicroPro WordMaster 1.07A *(1)*
+* Sorcim SuperCalc 2 *(1)*
+* Hayden Software Sargon 2.1
 
 Notes:
 1. needs to be run with (resp. some features need) the `-s` (full-screen console) option.
