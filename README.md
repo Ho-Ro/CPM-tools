@@ -224,5 +224,5 @@ apart from that, feel free to use it, modify it, or sell it for big
 money to whoever is stupid enough to buy it. This program was written
 by me from scratch and doesn't contain any third party code.
 ## Who wrote this crap?
-Georg Brein. If you cannot resist the urge to to contact me
+Georg Brein. If you cannot resist the urge to contact me
 about `tnylpo`, send mail to `tnylpo@gmx.at`.
