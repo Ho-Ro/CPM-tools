@@ -240,7 +240,7 @@ A>save 34 cpm64.com
 ```
 will contain the CCP at file offsets 880h to 107fh and the BDOS at file
 offsets 1080h to 1e7fh. `tcpm_disk` supports both variants with its
-`-s` resp. `-m` options (if your system images uses some other layout,
+`-s` resp. `-m` options (if your system image uses some other layout,
 you will have to extract the CCP and BDOS parts using the `dd` command,
 effectively creating a raw system image).
 
