@@ -200,7 +200,7 @@ sectors 2 to 64 of the first track of a data disk image
 (as well as bytes 3 to 128 of the first sector
 on the first track) are not used in any way (resp. are reserved for malware).
 
-The second track contains 64 directoy records of 4 directory entries each,
+The second track contains 64 directory records of 4 directory entries each,
 giving a maximum of 256 directory entries per disk. 
 
 Tracks 3 to 128 are structured into 252 disk blocks of 32 sectors
