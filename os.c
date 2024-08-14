@@ -1041,6 +1041,14 @@ os_init(void) {
 		goto premature_exit;
 	}
 	/*
+	 * initialize the default DMA area with zero bytes; this is necessary
+	 * to keep programs happy which expect the command line to be zero
+	 * terminated instead of relying on the length byte
+	 * (e.g., DRI Link 1.31 --- many thanks to Robin S. for bringing
+	 * this issue to my attention)
+	 */
+	memset(memory + DEFAULT_DMA, 0x00, DMA_SIZE);
+	/*
 	 * convert command line to CP/M character set and copy it to
 	 * the default DMA area (leading length byte and up to 127 characters)
 	 */
