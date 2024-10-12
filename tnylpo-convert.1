@@ -153,11 +153,17 @@ The options
 and
 .B -i
 are mutually exclusive; if neither is given, tnylpo-convert will drop
-unconvertible characters, but issue a warning. Likewise, the options
+unconvertible characters, but issue a warning. The options
 .B -z
 and
 .B -n
-cannot be used together.
+can be combined: If both
+.B -z
+and
+.B -n
+are given, the resulting file will be terminated with exactly one
+.B <sub>
+(0x1a) byte.
 .B
 .PP
 tnylpo-convert takes no positional arguments. The

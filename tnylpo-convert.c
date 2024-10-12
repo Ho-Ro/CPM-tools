@@ -267,13 +267,6 @@ get_config(int argc, char **argv) {
 		rc = (-1);
 	}
 	/*
-	 * -z and -n are incompatible
-	 */
-	if (append_cntrlz && omit_padding) {
-		perr("options -n and -z are mutually exclusive");
-		rc = (-1);
-	}
-	/*
 	 * command line error: print usage information and die
 	 */
 	if (rc) {
@@ -438,9 +431,11 @@ main(int argc, char **argv) {
 	/*
 	 * terminate CP/M format output
 	 */
-	if (! target_unix && ! omit_padding) {
+	if (! target_unix) {
 		if (append_cntrlz) write_cpm(0x1a /* SUB */);
-		while (target_size % 128) write_cpm(0x1a /* SUB */);
+		if (! omit_padding) {
+			while (target_size % 128) write_cpm(0x1a /* SUB */);
+		}
 	}
 	/*
 	 * check for source read errors
