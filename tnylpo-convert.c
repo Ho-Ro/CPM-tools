@@ -49,6 +49,10 @@
  */
 static int append_cntrlz = 0;
 /*
+ * omit padding a CP/M output file with ^Z bytes
+ */
+static int omit_padding = 0;
+/*
  * how to handle unconvertible characters
  */
 static int ignore_convert = 0;
@@ -98,6 +102,7 @@ usage(void) {
 	perr("    -e              treat unconvertible characters as error");
 	perr("    -f <fn>         read configuration file");
 	perr("    -i              ignore unconvertible characters");
+	perr("    -n              do not pad CP/M files with ^Z bytes");
 	perr("    -z              always terminate CP/M files with ^Z");
 	perr("<source> or <target> are");
 	perr("    -u ( <fn> | - ) text file in host OS format");
@@ -126,7 +131,7 @@ get_config(int argc, char **argv) {
 	int rc = 0, opt;
 	char *cfn = NULL;
 	opterr = 0;
-	while ((opt = getopt(argc, argv, "ac:ef:iu:z")) != EOF) {
+	while ((opt = getopt(argc, argv, "ac:ef:inu:z")) != EOF) {
 		switch (opt) {
 		case 'a':
 			/*
@@ -205,6 +210,17 @@ get_config(int argc, char **argv) {
 				ignore_convert = 1;
 			}
 			break;
+		case 'n':
+			/*
+			 * omit padding a CP/M target file with ^Z bytes
+			 */
+			if (omit_padding) {
+				only_once('n');
+				rc = (-1);
+			} else {
+				omit_padding = 1;
+			}
+			break;
 		case 'z':
 			/*
 			 * always append ^Z to the end of a CP/M target file
@@ -248,6 +264,13 @@ get_config(int argc, char **argv) {
 	 */
 	if (ignore_convert && error_convert) {
 		perr("options -i and -e are mutually exclusive");
+		rc = (-1);
+	}
+	/*
+	 * -z and -n are incompatible
+	 */
+	if (append_cntrlz && omit_padding) {
+		perr("options -n and -z are mutually exclusive");
 		rc = (-1);
 	}
 	/*
@@ -415,7 +438,7 @@ main(int argc, char **argv) {
 	/*
 	 * terminate CP/M format output
 	 */
-	if (! target_unix) {
+	if (! target_unix && ! omit_padding) {
 		if (append_cntrlz) write_cpm(0x1a /* SUB */);
 		while (target_size % 128) write_cpm(0x1a /* SUB */);
 	}

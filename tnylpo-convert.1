@@ -27,13 +27,13 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.TH tnylpo-convert 1 2020-09-05
+.TH tnylpo-convert 1 2024-10-12
 .SH NAME
 tnylpo-convert \- converts text files to and from the CP/M format
 .SH SYNOPSIS
 .HP
 .B tnylpo-convert 
-.RB [ -aeiz ]
+.RB [ -aeinz ]
 .RB [ -f
 .IR <config-file> ]
 [
@@ -120,6 +120,16 @@ cannot be used in combination with any other command line option)
 .B -i
 ignore all unconvertible characters by silently dropping them
 .TP
+.B -n
+do not pad CP/M text files with
+.B <sub>
+(0x1a) characters; CP/M programs running under
+.BR tnylpo (1)
+will still accept such files, since the BDOS emulation automatically pads
+files not ending on a record boundary with
+.B <sub>
+(0x1a) bytes on input
+.TP
 .BI -u " <textfile>"
 use the text file
 .I <textfile>
@@ -143,7 +153,12 @@ The options
 and
 .B -i
 are mutually exclusive; if neither is given, tnylpo-convert will drop
-unconvertible characters, but issue a warning.
+unconvertible characters, but issue a warning. Likewise, the options
+.B -z
+and
+.B -n
+cannot be used together.
+.B
 .PP
 tnylpo-convert takes no positional arguments. The
 .B -c
