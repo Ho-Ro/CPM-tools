@@ -3,13 +3,13 @@
 `tnylpo` allows the execution of programs written for CP/M-80
 version 2.2 under Unixy operating systems. It has been tested
 under Linux (Debian 8 i386, powerpc; Debian 9 amd64; Debian 10-12 amd64, i386;
-Ubuntu 18.04 LTS, Ubuntu 22.04 LTS; CentOS 6 i386, CentOS 7;
+Ubuntu 18.04 LTS, 22.04 LTS, 24.04 LTS; CentOS 6 i386, CentOS 7;
 Rocky Linux 9.1; Slackware 14.2 i386),
 FreeBSD (12.0 amd64; 13.0 i386), NetBSD (8.0 i386, sparc, vax;
 9.2 amd64, sparc64, i386; 10.0 i386, sparc), OpenBSD (6.4, 6.7, 6.9, 7.5 i386),
 Solaris (7 sparc; 9 sparc, i386; 10 i386, amd64),
-and Mac OS X (10.5 powerpc; 10.6; 10.7; 10.9; 10.11; 10.13; 10.15; 11-14 amd64, arm64),
-but should need little to no modifications to run under any other
+and Mac OS X (10.5 powerpc; 10.6; 10.7; 10.9; 10.11; 10.13; 10.15; 11-15 amd64,
+arm64), but should need little to no modifications to run under any other
 reasonably recent system. The companion program `tnylpo-convert`
 converts text files to and from the CP/M format.
 ## More details, please!
@@ -118,6 +118,9 @@ reported as working:
 * MicroPro WordMaster 1.07A *(1)*
 * Sorcim SuperCalc 2 *(1)*
 * Hayden Software Sargon 2.1
+* Research Machines RML Algol 4.1C
+* Micro Focus CIS Cobol 4.5
+* Digital Research Pascal MT+ 5.6.1
 
 Notes:
 1. needs to be run with (resp. some features need) the `-s` (full-screen console) option.
