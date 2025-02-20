@@ -190,7 +190,7 @@ usage(void) {
 	perr("    -s               use full screen mode console");
 	perr("    -t (<n>|@)       delay before exiting full screen mode *");
 	perr("    -v <level>       set log level");
-	perr("    -w               use alternate function keys *");
+	perr("    -w               use alternative cursor key codes *");
 	perr("    -y (n|<n>,<ns>)  add <ns> nanoseconds delay every <n> "
 	    "instructions");
 	perr("    -z {a|e|i|n|s|x} set dump options");
@@ -287,7 +287,7 @@ parse_int(const char **cpp) {
 	int rc = (-1);
 	unsigned long ul;
 	char *rp;
-	if (isdigit(**cpp)) {
+	if (isdigit((unsigned char) **cpp)) {
 		ul = strtoul(*cpp, &rp, 10);
 		*cpp = rp;
 		if (ul <= INT_MAX) rc = (int) ul;
@@ -308,13 +308,15 @@ parse_address(const char **cpp) {
 	if (*cp == '0') {
 		if (*(cp + 1) == 'x') {
 			cp += 2;
-			if (! isxdigit(*cp)) goto premature_exit;
+			if (! isxdigit((unsigned char) *cp)) {
+				goto premature_exit;
+			}
 			ul = strtoul(cp, &rp, 16);
 		} else {
 			ul = strtoul(cp, &rp, 8);
 		}
 	} else {
-		if (! isdigit(*cp)) goto premature_exit;
+		if (! isdigit((unsigned char) *cp)) goto premature_exit;
 		ul = strtoul(cp, &rp, 10);
 	}
 	*cpp = rp;

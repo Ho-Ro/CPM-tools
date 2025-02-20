@@ -2,14 +2,23 @@
 ## What is this?
 `tnylpo` allows the execution of programs written for CP/M-80
 version 2.2 under Unixy operating systems. It has been tested
-under Linux (Debian 8 i386, powerpc; Debian 9 amd64; Debian 10-12 amd64, i386;
-Ubuntu 18.04 LTS, 22.04 LTS, 24.04 LTS; CentOS 6 i386, CentOS 7;
-Rocky Linux 9.1; Slackware 14.2 i386),
-FreeBSD (12.0 amd64; 13.0 i386), NetBSD (8.0 i386, sparc, vax;
-9.2 amd64, sparc64, i386; 10.0 i386, sparc), OpenBSD (6.4, 6.7, 6.9, 7.5 i386),
-Solaris (7 sparc; 9 sparc, i386; 10 i386, amd64),
-and Mac OS X (10.5 powerpc; 10.6; 10.7; 10.9; 10.11; 10.13; 10.15; 11-15 amd64,
-arm64), but should need little to no modifications to run under any other
+under
+* Linux
+  * Debian 8 i386, powerpc; Debian 9 amd64; Debian 10-12 amd64, i386
+  * Ubuntu 18.04 LTS, 22.04 LTS, 24.04 LTS
+  * CentOS 6 i386; CentOS 7
+  * Rocky Linux 9.1
+  * Slackware 14.2 i386,
+* FreeBSD (12.0 amd64; 13.0 i386; 14.2 amd64),
+* NetBSD (8.0 i386, sparc, vax; 9.2 amd64, sparc64, i386; 10.0 i386, sparc;
+10.1 amd64),
+* OpenBSD (6.4, 6.7, 6.9, 7.6 i386),
+* Solaris (7 sparc; 9 sparc, i386; 10 i386, amd64),
+* AIX (5.3), and
+* Mac OS X (10.5 powerpc; 10.6; 10.7; 10.9; 10.11; 10.13; 10.15; 11-15 amd64,
+arm64),
+
+but should need little to no modifications to run under any other
 reasonably recent system. The companion program `tnylpo-convert`
 converts text files to and from the CP/M format.
 ## More details, please!
@@ -42,7 +51,7 @@ respectively. (cf. Wikipedia, s.v. [CP/M](http://en.wikipedia.org/wiki/CP/M))
 ## What makes this program special?
 I didn't do much research into other CP/M emulators, so I cannot tell you
 what makes `tnylpo` stand out from the crowd (and there is quite a crowd of
-CP/M emulators, see e. g. the [emulators page on Thomas Scherrer's Z80
+CP/M emulators, see e.g. the [emulators page on Thomas Scherrer's Z80
 pages](http://www.z80.info/z80emu.htm)).
 
 I wrote `tnylpo` for my own use, and I primarily need to run CP/M compilers
@@ -60,7 +69,7 @@ want to wait for the ages it takes the tired iron to create an executable,
 or if you simply prefer to edit your CP/M sources with your favourite
 Unix editor instead of CP/M's `ed`,
 you might find `tnylpo` useful. Likewise, it may be the right tool if
-you need to access e. g. old dBase II databases or WordStar text files,
+you need to access e.g. old dBase II databases or WordStar text files,
 especially if they contain data in some half-forgotten ASCII variant.
 
 In short, `tnylpo`
@@ -129,40 +138,68 @@ Notes:
 ## How do I build it?
 Make sure you have a version of the `ncurses` library supporting
 wide characters and its headers installed
-(I used version 5.9). You'll need a C compiler
+(I used version 5.9 during development). You'll need a C compiler
 supporting the C99
 standard. The `makefile` contains GNU `make` features, so you'll
 need GNU `make` to use it (but then it is trivial and short enough that you
 can easily modify it to suit your favourite `make` utility).
 
-Building itself (at least on tested platforms) is as easy as entering
+Building under Linux, Mac OS X, and Free/Open/NetBSD is as easy as entering
 ```sh
 make
 ```
-(resp. `gmake` on platforms with a non-GNU primary `make` utility).
+(resp. `gmake` on platforms with a non-GNU primary `make` utility). Under
+AIX and Solaris, you will have to edit `makefile` first, see the notes below.
+### Platform-specific notes:
+*Mac OS X*: The Xcode Command Line Tools (which can be installed with the
+command `xcode-select --install`) are sufficient to compile `tnylpo`,
+and the `ncurses` library is available by default.
 
-Note for Solaris users: Since there is no standardized installation directory
-for the `ncurses` library under Solaris, you will have to modify
-`$(NCURSESROOT)` to reflect the place where `ncurses` lives
-on your system; likewise, depending on the compiler you use, you will
-have to adapt `$(CC)` and possibly `$(CFLAGS)`. To create e. g. a `tnylpo` binary
-optimized for a SparcClassic running Solaris 9 using the `ncurses` package from the
-[OpenCSW project](https://www.opencsw.org) and Sun's Forte Developer 7 C compiler,
-you should use these values:
-```make
-CC=/opt/SUNWspro/bin/cc
-CFLAGS=-xc99=%all -fast -xtarget=sslc
-NCURSESROOT=/opt/csw
-```
-Compiling will take about a quarter of an hour, and the resulting binary will
-definitely not be suitable for the impatient...
+*Linux*: On most distributions, the packages `build-essential` and
+`libncurses-dev` (and optionally, `git`) resp. their dependencies provide
+everything needed for building `tynlpo`.
+
+*FreeBSD*: Installing the binary packages `ncurses` and `gmake` (and
+optionally, `git`) with `pkg install` will enable you to use the provided
+`makefile` to build `tnylpo`.
+
+*NetBSD*: `gmake` (and `git`) are available as binary packages, and
+can be installed with the command `pkgin install`. The provided `makefile`
+uses the native C compiler and `curses` library, which is sufficiently
+compatible with `ncurses`.
+
+*OpenBSD*: `ncurses` and the C compiler are part of the core OpenBSD system,
+and `gmake` (and `git`) can be installed as binary packages with `pkg_add`.
+
+*AIX*: Depending on the available C compilers and the location of `ncurses`
+in the file system, you will have to adapt the AIX
+specific portion of `makefile`, especially  the variables `CC`, `NCURSESROOT`
+`CFLAGS`, and `LIBS`. As provided, `makefile` will work for 32 bit AIX 5.3
+(reflecting the limitations of my RS/6000 7043 Model 150 development system)
+with the freeware packages `ncurses`, `ncurses-devel`, `make`, and `gcc`
+(and their numerous dependencies) from
+[oss4aix.org](http://oss4aix.org/download/compatible/aix53/).
+
+*Solaris*: Depending on your Solaris version, your hardware, your compiler,
+and the place where `ncurses` lives on your system, you will have to adapt the
+Solaris portion in `makefile`. Unmodified, it will attempt to build
+`tnylpo` for a UltraSparc IIe running Solaris 9 using the Forte 7 Developer
+compiler and the `ncurses` package from the
+[OpenCSW project](https://www.opencsw.org). As a guideline, two alternative
+configurations (32 bit Sparc, IA32 with `gcc`) are included as comments.
+
+Solaris releases prior to Solaris 10 come with UTF-8 fonts
+containing double-width box drawing characters which `tnylpo` cannot handle
+correctly. On these systems, `CFLAGS` should contain `-DOLD_SOLARIS`
+to approximate the box drawing characters in the built-in `tnylpo`
+character set using ASCII characters.
 ## How do I install it?
 Copy the resulting binaries `tnylpo` and `tnylpo-convert` to a
 directory in your `PATH`
-(e. g. `/usr/local/bin`) and the man pages
+(e.g. `/usr/local/bin`) and the man pages
 [`tnylpo.1`](https://gitlab.com/gbrein/tnylpo/wikis/tnylpo.1) and
 [`tnylpo-convert.1`](https://gitlab.com/gbrein/tnylpo/wikis/tnylpo-convert.1) to
-an appropriate directory in your `man` hierarchy (e. g.
+an appropriate directory in your `man` hierarchy (e.g.
 `/usr/local/share/man/man1`).
 ```sh
 man tnylpo
