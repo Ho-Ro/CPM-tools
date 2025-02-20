@@ -38,7 +38,11 @@
 
 #include <unistd.h>
 #include <sys/select.h>
-#include <curses.h>
+#if (defined USE_CURSES)
+#	include <curses.h>
+#else
+#	include <ncurses.h>
+#endif
 
 #include "tnylpo.h"
 
@@ -981,7 +985,7 @@ crt_out(unsigned char c) {
 			break;
 		case 0x6e /* n */:
 			/*
-			 * use alternate cursor keys; extension to VT52
+			 * use alternative cursor keys; extension to VT52
 			 */
 			altkeys = 1;
 			break;
