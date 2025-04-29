@@ -4,10 +4,15 @@ that are either difficult to find or customised by me or are completely new.
 Some software was created during [hacking the BIOS of my Z80-MBC2](https://github.com/Ho-Ro/Z80-MBC2)
 (e.g. to add a high speed double SIO), other was written just for fun.
 
-Most tools use either [HI-TECH C (version 3.09-17) from agn453](https://raw.githubusercontent.com/agn453/HI-TECH-Z80-C/master/htc-bin.lbr) (provided here for completeness) or a Z80 assembler/linker ZSM4/LINK.
+Most tools use either [HiTech C (version 3.09-17) from agn453](https://raw.githubusercontent.com/agn453/HI-TECH-Z80-C/master/htc-bin.lbr) (provided here for completeness) or a Z80 assembler/linker ZSM4/LINK.
 The Pascal tools need an unmodified Turbo Pascal 3.
 
 ## tinytar
+
+I wrote this program simply because there was no CP/M tar implementation. It was written
+as a cleanroom approach using only [RFC1951](https://www.rfc-editor.org/rfc/rfc1951) and
+[RFC1952](https://www.rfc-editor.org/rfc/rfc1952) because I wanted to see how easy or
+difficult it was - the former was the case.
 
 ```
  * tinytar.c - A minimal ANSI C89-compatible TAR archive utility.
@@ -58,7 +63,9 @@ The Pascal tools need an unmodified Turbo Pascal 3.
 
 ## gunzip
 
-Based on a simple Unix zcat:
+Based on a simple Unix [zcat](https://github.com/pts/pts-zcat) I hacked a CP/M version that
+can be compiled with HiTech C. This compiler is almost ANSI-C standard.
+
 ```
  * muzcat_simple.c -- decompression filter in simple, portable C
  * by pts@fazekas.hu at Tue Jun 16 16:50:24 CEST 2020
