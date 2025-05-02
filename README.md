@@ -56,8 +56,10 @@ difficult it was - the former was the case.
  *
  * Building on CP/M with HI-TECH C:
  *   Use version V3.09-17 from https://github.com/agn453/HI-TECH-Z80-C
- *   cc -o -v -etar.com tinytar.c
+ *   cc -v -o -n -etar.com tinytar.c
  *   This creates the file TAR.COM that resembles the std. tar commands.
+ *
+ *   Due to issues with fseek on files opened with "r+b" no append mode for CP/M
  *
 ```
 
@@ -88,7 +90,7 @@ Modifications and supported features
  *   calculate CRC32 during expanding and check against CRC32 of archive.
  * * Compile for Linux: `gcc -Wall -Wextra -Wpedantic -std=c89 -o gunzip gunzip.c`
  *   Supports display of mtime stored in archive.
- * * Compiles for CP/M using HI-TECH C: 'cc -v gunzip.c'.
+ * * Compiles for CP/M using HI-TECH C: 'cc -v -n gunzip.c'.
  *   Do not optimise '-o', OPTIM.COM stops due to 'Out of memory'.
  * * CP/M needs a hack to get the real file size (w/o trailing ^Z)
  *   and convert ^Z at end of file into C EOF (-1).

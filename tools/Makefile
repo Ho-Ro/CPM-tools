@@ -8,14 +8,14 @@ all: $(CPMTOOLS) $(LINUXTOOLS)
 
 
 gunzip.com: gunzip.c
-	tnylpo cc -v -e$@ $<
+	tnylpo cc -v -n -e$@ $<
 
 gunzip: gunzip.c
 	gcc $(CFLAGS) -o $@ $<
 
 
 tar.com: tinytar.c
-	tnylpo cc -v -e$@ $<
+	tnylpo cc -v -o -n -e$@ $<
 
 tinytar: tinytar.c
 	gcc $(CFLAGS) -o $@ $<
