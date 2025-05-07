@@ -14,6 +14,8 @@
  * * Compiles for CP/M using HI-TECH C: 'cc -v gunzip.c'.
  *   Do not optimise '-o', OPTIM.COM stops due to 'Out of memory'.
  *   Program becomes too big when using time and date functions.
+ * * Compile for CP/M with z88dk:
+ *   zcc +cpm -v --opt-code-speed -DAMALLOC -pragma-define:CRT_STACK_SIZE=1024 -ogunzip.com gunzip.c
  *
  * The implementation was inspired by https://www.ioccc.org/1996/rcm/index.html
  *
@@ -40,7 +42,7 @@
  * * https://gist.github.com/bwoods/a6a467430ed1c5f3fa35d01212146fe7
  */
 
-#define VERSION "20250502"
+#define VERSION "20250507"
 
 #ifndef CPM
 #define MTIME
@@ -52,7 +54,7 @@
 
 #include <stdio.h>  /* FILE functions, getc(), putc(), etc. */
 #include <stdint.h> /* intN_t and uintN_t */
-#include <stdlib.h> /* exit() */
+#include <stdlib.h> /* exit(), calloc */
 #include <string.h> /* strcmp() */
 #ifdef MTIME
 #include <time.h>
@@ -71,15 +73,28 @@ int16_t constQ[] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
 int16_t constL[] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
                    8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
 int16_t D, C, T, J, Y;
+
+#ifdef __Z88DK
+/* these big arrays will be "calloc"ed in main to keep them out of the z88dk binary */
+int16_t *Z; /* int16_t Z[320];     640 */
+int16_t *B; /* int16_t B[17];       34 */
+int16_t *G; /* int16_t G[17];       34 */
+int16_t *N; /* int16_t N[1998];   3996 */
+uint8_t *S; /* uint8_t S[32768]; 32768 Dictionary == lookback buffer. */
+/*                               ----- */
+/*             Total HEAP size:  37472 */
+/*                               ===== */
+#else
 int16_t Z[320];
 int16_t B[17];
 int16_t G[17];
 int16_t N[1998];
-uint8_t S[32768];  /* Dictionary == lookback buffer. */
+uint8_t S[32768]; /* Dictionary == lookback buffer. */
+#endif
 
 FILE *infile = NULL, *outfile = NULL;
 char *inname = NULL, *outname = NULL;
-uint32_t bytecount;
+long bytecount;
 
 /* Table of CRCs of all 8-bit messages. */
 uint32_t crc_table[256];
@@ -294,7 +309,7 @@ FILE *gzip_open() {
   FILE *fp;
   uint8_t *cp;
   int16_t n;
-  uint32_t lrpos;
+  long lrpos;
   uint32_t ISIZE;
 #ifdef MTIME
   time_t mtime;
@@ -314,10 +329,8 @@ FILE *gzip_open() {
     fprintf( stderr, "%s: File too short, no GZIP format\n", inname );
     exit( 2 );
   }
-  lrpos = (bytecount - 1) & (uint32_t)(-RECSIZE); /* pos of last record */
+  lrpos = (bytecount - 1) & (long)(-RECSIZE); /* pos of last record */
 
-  /* fprintf( stderr, "bytecount: %u\n", bytecount ); */
-  /* fprintf( stderr, "lrpos: %u\n", lrpos ); */
   fseek( fp, lrpos, SEEK_SET ); /* go to last record */
   n = fread( S, 1, RECSIZE, fp ); /* read this record */
   if ( n == RECSIZE ) { /* search backwards for char != ^Z */
@@ -338,7 +351,7 @@ FILE *gzip_open() {
     exit( 2 );
   }
   /* fprintf( stderr, "XFL: %d, OS: %d - ", S[8], S[9] ); */
-  fprintf( stderr, "compressed: %u - uncompressed: ", bytecount );
+  fprintf( stderr, "compressed: %ld - uncompressed: ", bytecount );
   if ( S[ 3 ] == 0x08 ) {
     outname = (char *)(S+10);
     fprintf( stderr, "%s ", outname);
@@ -368,6 +381,11 @@ FILE *gzip_open() {
 }
 
 
+void errexit( char *msg ) {
+  fprintf( stderr, "%s\n", msg );
+  exit( -1 );
+}
+
 
 int main(int argc, char **argv) {
   int16_t o, q, ty, oo, ooo, oooo, f, p, x, v, h, g;
@@ -385,6 +403,21 @@ int main(int argc, char **argv) {
 #endif
     return 1 ;
   }
+
+#ifdef __Z88DK
+/* these big arrays will be "calloc"ed in main to keep them out of the z88dk binary */
+  if ( !( Z = (int16_t *)calloc( 320, 2 ) ) )
+    errexit( "Z out of memory" );
+  if ( !( B = (int16_t *)calloc( 17, 2 ) ) )
+    errexit( "B out of memory" );
+  if ( !( G = (int16_t *)calloc( 17, 2 ) ) )
+    errexit( "G out of memory" );
+  if ( !( N = (int16_t *)calloc( 1998, 2 ) ) )
+    errexit( "N out of memory" );
+  if ( !( S = (uint8_t *)calloc( 32768, 1 ) ) )
+    errexit( "S out of memory" );
+#endif
+
   inname = argv[ 1 ];
 
   infile = gzip_open(); /* open file and show archive info */
