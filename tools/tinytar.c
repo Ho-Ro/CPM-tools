@@ -8,6 +8,7 @@
  *
  * Supported Modes (UNIX-compatible syntax):
  *   -cf archive.tar file1 [file2 ...]  # Create a new archive from files
+ *   -rf archive.tar file1 [file2 ...]  # Append files to an existing archive
  *   -xf archive.tar                    # Extract all files from an archive
  *   -tf archive.tar                    # List contents of an archive
  *   archive.tar                        # Same as -tf archive.tar
@@ -16,6 +17,8 @@
  *   - Fully ANSI C89 compatible (no POSIX-specific functions used).
  *   - Uses only the standard C library (stdio.h, string.h, etc.).
  *   - Validates USTAR magic to ensure archive format correctness.
+ *   - Appending safely handles existing TAR structure and trailing blocks.
+ *   - Automatically overwrites and rewrites final zero blocks.
  *   - Stores file modification time (or current time if mtime is missing).
  *   - Creates smaller files than (uncompressed) UNIX tar because it puts
  *     only 2 empty blocks at the archive end (as defined in the standard)
@@ -36,37 +39,31 @@
  *   gcc -Wall -Wextra -Wpedantic -std=c89 -o tinytar tinytar.c
  *   Keep the name "tinytar" to distinguish it from real tar.
  *
- * Building on CP/M with HI-TECH C:
- *   Use version V3.09-17 from https://github.com/agn453/HI-TECH-Z80-C
- *   c309-17 -o -v -etar.com tinytar.c
+ * Building for CP/M with Z88DK:
+ *   zcc +cpm -mz80 -v -otar.com tinytar.c
  *   This creates the file TAR.COM that resembles the std. tar commands.
  *
  * Author: Martin Homuth-Rosemann
  * License: GPL-3.0-or-later
  */
 
-#define VERSION "20250503"
+#define VERSION "20250507"
 
 #include <ctype.h>  /* isprint */
 #include <stdio.h>  /* fopen, fread, fwrite, fclose, printf, sprintf */
-#include <stdint.h> /* intN_t, uintN_t */
 #include <stdlib.h> /* malloc, free, exit */
 #include <string.h> /* strncpy, memset, strlen */
 #include <time.h>   /* time_t */
-#ifdef z80
-#define const
-#include <stat.h> /* for stat, struct stat, S_IFREG */
-#ifndef S_ISREG   /* missing macro */
-#define S_ISREG( m ) ( ( (m)&S_IFMT ) == S_IFREG )
-#endif
-#else
 #include <sys/stat.h> /* for stat, struct stat, S_IFREG */
-#endif
-
 
 #define RECORD_SIZE 512
-uint8_t record[ RECORD_SIZE ];
+unsigned char record[ RECORD_SIZE ];
 
+#define NAME_SIZE 101
+char filename[ NAME_SIZE ];
+
+#define T_19800101 315532800L
+time_t now;
 
 /* -------------------- TAR HEADER STRUCTURE -------------------- */
 struct tar_header {
@@ -90,35 +87,71 @@ struct tar_header {
 
 
 /* -------------------- HELPERS -------------------- */
-int32_t octal_to_int32( const char *str, int len ) {
-    int32_t value = 0;
-    int i;
-    for ( i = 0; i < len && str[ i ]; ++i ) {
-        if ( str[ i ] >= '0' && str[ i ] <= '7' ) {
-            value = ( value << 3 ) + ( str[ i ] - '0' );
-        }
+long octal_to_long( const char *str, int len ) {
+    long value = 0;
+    while ( len-- ) {
+        if ( *str >= '0' && *str <= '7' )
+            value = ( value << 3 ) + ( *str - '0' );
+        ++str;
     }
     return value;
 }
 
 
-int is_block_empty( const uint8_t *block ) {
-    int i;
-    for ( i = 0; i < RECORD_SIZE; ++i )
-        if ( block[ i ] != 0 )
+void long_to_octal( char *out, size_t size, long val ) {
+    snprintf( out, size, "%0*lo", (int)( size - 1 ), val );
+    out[ size - 1 ] = '\0';
+}
+
+
+int is_block_empty( const unsigned char *block ) {
+    int i = RECORD_SIZE;
+    while( i-- )
+        if ( *block++ != 0 )
             return 0;
     return 1;
 }
 
 
-int is_valid_tar_header( const uint8_t *header ) {
-    fprintf( stderr, "%s\n", (char *)header + 257 );
+int is_valid_tar_header( const unsigned char *header ) {
     return strncmp( (char *)header + 257, "ustar", 5 ) == 0;
 }
 
 
-uint32_t get_file_size( FILE *f ) {
-    uint32_t size;
+long find_append_position( FILE *fp ) {
+    long filesize, skip, zpos;
+
+    fseek( fp, 0, SEEK_SET );
+
+    while ( fread( record, 1, RECORD_SIZE, fp ) == RECORD_SIZE ) {
+        if ( is_block_empty( record ) ) {
+            /* Possible start of trailing zero blocks */
+            zpos = ftell( fp ) - RECORD_SIZE;
+            /* Check if the next block is also zero */
+            if ( fread( record, 1, RECORD_SIZE, fp ) == RECORD_SIZE && is_block_empty( record ) )
+                /* Found trailing padding  stop here */
+                return zpos;
+            else
+                /* False alarm  continue */
+                fseek( fp, -RECORD_SIZE, SEEK_CUR );
+        }
+
+        if ( !is_valid_tar_header( record ) )
+            return -1; /* Invalid TAR */
+
+        /* Get file size and skip content */
+        filesize = octal_to_long( (char *)( record + 124 ), 12 );
+        skip = ( ( filesize + RECORD_SIZE - 1 ) / RECORD_SIZE ) * RECORD_SIZE;
+        fseek( fp, skip, SEEK_CUR );
+    }
+
+    /* If we reached EOF with no trailing zeros: append at EOF */
+    return ftell( fp );
+}
+
+
+long get_file_size( FILE *f ) {
+    long size;
     fseek( f, 0, SEEK_END );
     size = ftell( f );
     fseek( f, 0, SEEK_SET );
@@ -126,17 +159,17 @@ uint32_t get_file_size( FILE *f ) {
 }
 
 
-void write_tar_header( FILE *out, const char *filename, uint32_t filesize, time_t mtime ) {
+void write_tar_header( FILE *out, const char *filename, long filesize, long mtime ) {
     unsigned int i, checksum;
     struct tar_header header;
 
     memset( &header, 0, sizeof( header ) );
     strncpy( header.name, filename, 100 );
-    sprintf( header.mode, "%07o", 0644 );
-    sprintf( header.uid, "%07o", 1000 );
-    sprintf( header.gid, "%07o", 1000 );
-    sprintf( header.size, "%011o", filesize );
-    sprintf( header.mtime, "%011lo", mtime );
+    long_to_octal( header.mode, 8, 0644 );
+    long_to_octal( header.uid, 8, 1000 );
+    long_to_octal( header.gid, 8, 1000 );
+    long_to_octal( header.size, 12, filesize );
+    long_to_octal( header.mtime, 12, mtime );
     memset( header.chksum, ' ', 8 );
     header.typeflag = '0';
     strncpy( header.magic, "ustar  ", 8 );
@@ -144,9 +177,8 @@ void write_tar_header( FILE *out, const char *filename, uint32_t filesize, time_
     strncpy( header.gname, "group", 32 );
 
     checksum = 0;
-    for ( i = 0; i < sizeof( header ); ++i ) {
+    for ( i = 0; i < sizeof( header ); ++i )
         checksum += ( (unsigned char *)&header )[ i ];
-    }
 
     sprintf( header.chksum, "%06o", checksum );
     header.chksum[ 6 ] = '\0';
@@ -162,69 +194,101 @@ void write_file_content( FILE *out, FILE *in, long filesize ) {
 
     while ( remaining > 0 ) {
         n = fread( record, 1, RECORD_SIZE, in );
-        if ( n < RECORD_SIZE ) {
+        if ( n < RECORD_SIZE )
             memset( record + n, 0, RECORD_SIZE - n );
-        }
         fwrite( record, 1, RECORD_SIZE, out );
         remaining -= n;
     }
 }
 
 
-/* ------------------------------------------------------ */
-/* --------------------- CREATE MODE -------------------- */
-/* ------------------------------------------------------ */
-void mode_create( int argc, char **argv ) {
-    FILE *out, *in;
+void write_file( char *filename, long filesize, FILE *tar ) {
+    FILE *in;
     struct stat st;
-    uint32_t filesize;
-    time_t mtime;
+    long mtime;
+
+    in = fopen( filename, "rb" );
+    if ( !in ) {
+        perror( filename );
+        return;
+    }
+
+    if ( stat( filename, &st ) != 0 || !S_ISREG( st.st_mode ) ) {
+        fprintf( stderr, "Skipping: %s (not a regular file)\n", filename );
+        fclose( in );
+        return;
+    }
+#ifdef CPM
+    mtime = st.st_atime;
+    if ( mtime <= T_19800101 )   /* no valid timestamp */
+        mtime = now;
+#else
+    filesize = get_file_size( in );
+    mtime = st.st_mtime;
+#endif
+    fprintf( stderr, "%s (%ld)\n", filename, filesize );
+
+    write_tar_header( tar, filename, filesize, mtime );
+    write_file_content( tar, in, filesize );
+    fclose( in );
+}
+
+
+/* ------------------------------------------------------ */
+/* --------------- CREATE OR APPEND MODE ---------------- */
+/* ------------------------------------------------------ */
+void mode_create_append( int append, int argc, char *argv[] ) {
+    FILE *tar;
     int i;
 
-#ifdef CPM
-    time( &mtime );
-    mtime -= 7200;
+    if ( append ) {
+        long append_pos;
+        tar = fopen( argv[ 2 ], "r+b" );
+        if ( !tar ) {
+            perror( "Cannot open archive" );
+            exit( 1 );
+        }
+        append_pos = find_append_position( tar );
+        if ( append_pos < 0 ) {
+            fprintf( stderr, "Invalid or corrupt TAR archive\n" );
+            fclose( tar );
+            exit( 1 );
+        }
+        fseek( tar, append_pos, SEEK_SET );
+    } else {
+        tar = fopen( argv[ 2 ], "wb" );
+        if ( !tar ) {
+            perror( "Cannot create archive" );
+            exit( 1 );
+        }
+    }
+
+#ifdef __Z88DK
+    /* parse wildcard args */
+    for (i = 3; i < argc; ++i) {
+        int x;
+        char *filename;
+        if ( ( x = dir_move_first() ) != 0 ) continue;
+
+        while ( x == 0 ) {
+            filename = dir_get_entry_name();
+            if ( wcmatch( argv[i], filename ) )
+                if ( 0 == dir_get_entry_type() ) /* 0: file, 1: dir */
+                    write_file( filename, dir_get_entry_size(), tar );
+            x = dir_move_next();
+        }
+    }
+#else
+    for ( i = 3; i < argc; ++i )
+        write_file( argv[ i ], -1, tar );
 #endif
 
-    out = fopen( argv[ 2 ], "wb" );
-    if ( !out ) {
-        perror( "Cannot create archive" );
-        exit( 1 );
-    }
+    /* Write final two 512-byte zero blocks */
+    memset( record, 0, RECORD_SIZE );
+    fwrite( record, 1, RECORD_SIZE, tar );
+    fwrite( record, 1, RECORD_SIZE, tar );
 
-    for ( i = 3; i < argc; ++i ) {
-        in = fopen( argv[ i ], "rb" );
-        if ( !in ) {
-            perror( argv[ i ] );
-            continue;
-        }
-
-        if ( stat( argv[ i ], &st ) != 0 || !S_ISREG( st.st_mode ) ) {
-            fprintf( stderr, "Skipping: %s (not a regular file)\n", argv[ i ] );
-            fclose( in );
-            continue;
-        }
-
-        filesize = get_file_size( in );
-#ifndef CPM
-        mtime = st.st_mtime;
-#endif
-        fprintf( stderr, "%s (%d bytes)\n", argv[ i ], filesize );
-
-        write_tar_header( out, argv[ i ], filesize, mtime );
-        write_file_content( out, in, filesize );
-        fclose( in );
-    }
-
-    /* Final two 512-byte blocks of zeros */
-    {
-        char block[ RECORD_SIZE ];
-        memset( block, 0, RECORD_SIZE );
-        fwrite( block, 1, RECORD_SIZE, out );
-        fwrite( block, 1, RECORD_SIZE, out );
-    }
-
-    fclose( out );
+    fclose( tar );
 }
 
 
@@ -233,9 +297,8 @@ void mode_create( int argc, char **argv ) {
 /* ------------------------------------------------------ */
 void mode_list( const char *tarfile ) {
     FILE *fp;
-    int32_t filesize;
+    long filesize;
     int i;
-    char filename[ 101 ];
 
     fp = fopen( tarfile, "rb" );
     if ( !fp ) {
@@ -252,12 +315,12 @@ void mode_list( const char *tarfile ) {
             break;
         }
 
-        for ( i = 0; i < 100 && record[ i ]; ++i )
+        for ( i = 0; i < NAME_SIZE - 1 && record[ i ]; ++i )
             filename[ i ] = isprint( record[ i ] ) ? record[ i ] : '?';
         filename[ i ] = '\0';
 
-        filesize = octal_to_int32( (char *)( record + 124 ), 12 );
-        printf( "%s (%d bytes)\n", filename, filesize );
+        filesize = octal_to_long( (char *)( record + 124 ), 12 );
+        printf( "%s (%ld bytes)\n", filename, filesize );
 
         fseek( fp, ( ( filesize + 511 ) / 512 ) * 512, SEEK_CUR );
     }
@@ -270,51 +333,51 @@ void mode_list( const char *tarfile ) {
 /* -------------------- EXTRACT MODE -------------------- */
 /* ------------------------------------------------------ */
 void mode_extract( const char *tarfile ) {
-    FILE *fp, *out;
-    int32_t filesize, remaining;
+    FILE *tar, *out;
+    long filesize, remaining;
     int i, to_read;
-    char filename[ 101 ];
 
-    fp = fopen( tarfile, "rb" );
-    if ( !fp ) {
+    tar = fopen( tarfile, "rb" );
+    if ( !tar ) {
         perror( "open" );
         exit( 1 );
     }
 
-    while ( fread( record, 1, RECORD_SIZE, fp ) == RECORD_SIZE ) {
+    while ( fread( record, 1, RECORD_SIZE, tar ) == RECORD_SIZE ) {
+
         if ( is_block_empty( record ) )
             break;
+
         if ( !is_valid_tar_header( record ) ) {
             fprintf( stderr, "Invalid TAR format: missing ustar magic.\n" );
             break;
         }
 
-        for ( i = 0; i < 100 && record[ i ]; ++i )
+        for ( i = 0; i < NAME_SIZE - 1 && record[ i ]; ++i )
             filename[ i ] = isprint( record[ i ] ) ? record[ i ] : '?';
         filename[ i ] = '\0';
 
-        filesize = octal_to_int32( (char *)( record + 124 ), 12 );
-        printf( "Extracting: %s (%d bytes)\n", filename, filesize );
+        filesize = octal_to_long( (char *)( record + 124 ), 12 );
 
         out = fopen( filename, "wb" );
-        if ( !out ) {
+        if ( out )
+            printf( "%s (%ld)\n", filename, filesize );
+        else {
             perror( filename );
-            fseek( fp, ( ( filesize + 511 ) / 512 ) * 512, SEEK_CUR );
+            fseek( tar, ( ( filesize + 511 ) / 512 ) * 512, SEEK_CUR );
             continue;
         }
 
         remaining = filesize;
         while ( remaining > 0 ) {
             to_read = remaining > RECORD_SIZE ? RECORD_SIZE : (int)remaining;
-            fread( record, 1, RECORD_SIZE, fp );
+            fread( record, 1, RECORD_SIZE, tar );
             fwrite( record, 1, to_read, out );
             remaining -= to_read;
         }
         fclose( out );
-
     }
-
-    fclose( fp );
+    fclose( tar );
 }
 
 
@@ -322,34 +385,53 @@ void usage( char *argv0 ) {
     printf( "Tiny TAR archiving tool version %s\n", VERSION );
     printf( "Usage:\n" );
     printf( "  %s -cf archive.tar file1 [file2 ...]  # Create archive from files.\n", argv0 );
+    printf( "  %s -rf archive.tar file1 [file2 ...]  # Append files to archive.\n", argv0 );
     printf( "  %s [-tf] archive.tar                  # List all files in archive.\n", argv0 );
     printf( "  %s -xf archive.tar                    # Extract all files from archive.\n", argv0 );
 }
+
+
+/* command line arguments, CP/M converts everything into upper case */
+#ifdef CPM
+#define TF "-TF"
+#define XF "-XF"
+#define CF "-CF"
+#define RF "-RF"
+#else
+#define TF "-tf"
+#define XF "-xf"
+#define CF "-cf"
+#define RF "-rf"
+#endif
+
 
 
 /* ---------------------------------------------- */
 /* -------------------- MAIN -------------------- */
 /* ---------------------------------------------- */
 int main( int argc, char *argv[] ) {
-#ifdef CPM
-    argv[ 0 ] = "tar"; /* argv[0] from HI-TECH C is the empty string ("") */
-#endif
     if ( argc < 2 ) {
-        usage( argv[ 0 ] );
+#ifdef CPM
+        *argv = "tar"; /* argv[0] CP/M is the empty string ("") */
+#endif
+        usage( *argv );
         return 1;
     }
-    /* CP/M converts all args to UPPERCASE! */
-    if ( argc == 2 || !strcmp( argv[ 1 ], "-tf" ) || !strcmp( argv [ 1 ], "-TF" ) ) {
+
+    now = time( NULL );
+    if ( now <= T_19800101 ) /* no valid time */
+        now = T_19800101;
+
+    if ( argc == 2 || strcmp( argv[ 1 ], TF ) == 0 ) {
         mode_list( argv[ argc == 2 ? 1 : 2 ] );
-    } else if ( argc == 3 &&
-        ( !strcmp( argv[ 1 ], "-xf" ) || !strcmp( argv[ 1 ], "-XF" ) ) ) {
+    } else if ( argc == 3 && strcmp( argv[ 1 ], XF ) == 0 ) {
         mode_extract( argv[ 2 ] );
-    } else if ( argc >= 4 &&
-        ( !strcmp( argv[ 1 ], "-cf" ) || !strcmp( argv[ 1 ], "-CF" ) ) ) {
-        mode_create( argc, argv );
+    } else if ( argc >= 4 && strcmp( argv[ 1 ], CF ) == 0 ) {
+        mode_create_append( 0, argc, argv );
+    } else if ( argc >= 4 && strcmp( argv[ 1 ], RF ) == 0 ) {
+        mode_create_append( 1, argc, argv );
     } else {
-        usage( argv[ 0 ] );
-        fprintf( stderr, "Invalid arguments.\n" );
+        usage( *argv );
         return 1;
     }
 
