@@ -1,5 +1,6 @@
 
 CPMTOOLS = tar.com gunzip.com
+
 LINUXTOOLS = tinytar gunzip
 
 CFLAGS =  -Wall -Wextra -Wpedantic -std=c89
@@ -7,20 +8,24 @@ CFLAGS =  -Wall -Wextra -Wpedantic -std=c89
 all: $(CPMTOOLS) $(LINUXTOOLS)
 
 
-gunzip.com: gunzip.c
-	tnylpo cc -v -n -e$@ $<
-
-gunzip: gunzip.c
+gunzip: gunzip.c Makefile
 	gcc $(CFLAGS) -o $@ $<
 
 
-tar.com: tinytar.c
-	tnylpo cc -v -o -n -e$@ $<
+gunzip.com: gunzip.c Makefile
+	tnylpo cc -v -n -dMYTZ=1 -e$@ $<
 
-tinytar: tinytar.c
-	gcc $(CFLAGS) -o $@ $<
+
+tar.com: tinytar.c Makefile
+	make -C tar_work $@
+	cp tar_work/$@ .
+
+tinytar: tinytar.c Makefile
+	make -C tar_work $@
+	cp tar_work/$@ .
 
 
 .PHONY: clean
 clean:
+	make -C tar_work clean
 	-rm $(CPMTOOLS) $(LINUXTOOLS) *~

@@ -42,21 +42,13 @@
  * * https://gist.github.com/bwoods/a6a467430ed1c5f3fa35d01212146fe7
  */
 
-#define VERSION "20250507"
-
-#ifndef CPM
-#define MTIME
-#else
-#ifdef __Z88DK
-#define MTIME
-#endif
-#endif
+#define VERSION "20250508"
 
 #include <stdio.h>  /* FILE functions, getc(), putc(), etc. */
 #include <stdint.h> /* intN_t and uintN_t */
 #include <stdlib.h> /* exit(), calloc */
 #include <string.h> /* strcmp() */
-#ifdef MTIME
+#ifdef __unix__
 #include <time.h>
 #endif
 
@@ -278,26 +270,99 @@ void mc_write(int16_t arg) {
 }
 
 
-#ifdef __Z88DK
-/* hard coded: timezone = +1 (Europe/Berlin) */
-#define TIMEZONE (+1 + (time->tm_isdst ? 1 : 0))
 
-char *isotime( time_t *t )
-{
+#ifdef HI_TECH_C
+
+typedef long time_t;
+
+/* gmtime() taken from z88dk lib src */
+#define SECS_PER_MINUTE ((time_t)60L)
+#define SECS_PER_HOUR	((time_t)(60L * SECS_PER_MINUTE))
+#define SECS_PER_DAY	((time_t)(24L * SECS_PER_HOUR))
+#define SECS_PER_YEAR	((time_t)(365L * SECS_PER_DAY))
+#define SECS_PER_LEAP	((time_t)(SECS_PER_YEAR+SECS_PER_DAY))
+
+static int is_leap( int year ) {
+  year += 1900; /* Get year, as ordinary humans know it */
+  /*
+   * The rules for leap years are not
+   * as simple as "every fourth year
+   * is leap year":
+   */
+  if( (unsigned int)year % 100 == 0 ) {
+    return (unsigned int)year % 400 == 0;
+  }
+  return (unsigned int)year % 4 == 0;
+}
+
+int __days_per_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+
+/* hard coded: timezone =  (GMT) */
+#ifndef MYTZ
+#define MYTZ 0 /* GMT */
+#endif
+
+char *isotime( time_t *tp ) {
   /* Creates time string in ISO format: */
-  /* e.g. "2025-04-30 13:34\0"          */
-  static char time_buf[17];
-  struct tm *time;
-  time = gmtime( t );
-  memset(time_buf,' ',16);
-  sprintf( time_buf, "%04d-%02d-%02d %02d:%02d",
-            1900+time->tm_year,
-            time->tm_mon+1, /* 0..11 */
-            time->tm_mday,
-            time->tm_hour + TIMEZONE,
-            time->tm_min );
+  /* e.g. "2025-04-30 12:34:56\0"          */
+  static char timestr[ 20 ];
 
-  return (time_buf);
+  time_t t, secs_this_year;
+
+  int sec  = 0;
+  int min  = 0;
+  int hour = 0;
+  int mday = 1;
+  int mon  = 0;
+  int year = 70;
+
+  memset( timestr, 0, 20 );
+
+  t = *tp + MYTZ * SECS_PER_HOUR;
+
+  /*
+    *	This loop handles dates in 1970 and later
+    */
+  while ( secs_this_year = is_leap(year) ? SECS_PER_LEAP : SECS_PER_YEAR,
+          t >= secs_this_year ) {
+      t -= secs_this_year;
+      year++;
+  }
+  /*
+    *	This loop handles dates before 1970
+    */
+  while ( t < 0 )
+    t += is_leap(--year) ? SECS_PER_LEAP : SECS_PER_YEAR;
+
+  if ( is_leap(year) )					/* leap year ? */
+    __days_per_month[1]++;
+
+  while ( t >= __days_per_month[mon] * SECS_PER_DAY ) {
+    t -= __days_per_month[mon++] * SECS_PER_DAY;
+  }
+
+  if ( is_leap(year) )					/* leap year ? restore Feb */
+      __days_per_month[1]--;
+
+  while ( t >= SECS_PER_DAY ) {
+    t -= SECS_PER_DAY;
+    mday++;
+  }
+  while ( t >= SECS_PER_HOUR ) {
+    t -= SECS_PER_HOUR;
+    hour++;
+  }
+  while ( t >= SECS_PER_MINUTE ) {
+    t -= SECS_PER_MINUTE;
+    min++;
+  }
+  sec = t;
+
+  sprintf( timestr, "%04d-%02d-%02d %02d:%02d:%02d",
+            1900 + year, mon + 1, mday,
+            hour, min, sec );
+
+  return timestr;
 }
 #endif
 
@@ -311,8 +376,8 @@ FILE *gzip_open() {
   int16_t n;
   long lrpos;
   uint32_t ISIZE;
-#ifdef MTIME
   time_t mtime;
+#ifdef __unix__
   char timestr[20];
 #endif
 
@@ -361,19 +426,14 @@ FILE *gzip_open() {
   fread( &CRC32_gz, 4, 1, fp ); /* pos: -8 */
   fread( &ISIZE, 4, 1, fp ); /* pos: -4 */
 
-#ifdef MTIME
   /* get modification time of archive content and display in ISO 8601 format */
   mtime = *(uint32_t*)(S+4);
-#ifdef __Z88DK
+#ifdef __unix__
+  strftime( timestr, sizeof timestr, "%Y-%m-%d %H:%M:%S", localtime( &mtime ) );
+  fprintf( stderr, "%u %s\n", ISIZE, timestr );
+#else
   /* use local isotime function */
   fprintf( stderr, "%lu %s\n", ISIZE, isotime( &mtime ) );
-#else
-  strftime( timestr, sizeof timestr, "%Y-%m-%d %H:%M", localtime( &mtime ) );
-  fprintf( stderr, "%u %s\n", ISIZE, timestr );
-#endif
-#else
-  /* HiTech C: no time functions b/c they blow up the com file too much */
-  fprintf( stderr, "%lu\n", ISIZE );
 #endif
 
   fseek( fp, 0, SEEK_SET ); /* rewind infile */
