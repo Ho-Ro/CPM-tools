@@ -22,11 +22,13 @@ difficult it was - the former was the case.
  * to a standard POSIX/GNU-compatible TAR archive (USTAR format).
  *
  * Supported Modes (UNIX-compatible syntax):
- *   -cf archive.tar file1 [file2 ...]  # Create a new archive from files
- *   -rf archive.tar file1 [file2 ...]  # Append files to an existing archive
- *   -xf archive.tar                    # Extract all files from an archive
- *   -tf archive.tar                    # List contents of an archive
- *   archive.tar                        # Same as -tf archive.tar
+ *   tar -cf archive.tar file1 [file2 ...]  # Create a new archive from files
+ *   tar -rf archive.tar file1 [file2 ...]  # Append files to an existing archive
+ *   tar -xf archive.tar                    # Extract all files from an archive
+ *   tar -tf archive.tar                    # List contents of an archive
+ *   tar archive.tar                        # Same as -tf archive.tar
+ *
+ *   file1, file2,... may contain wildcard character, i.e. '*' and '?'
  *
  * Features:
  *   - Fully ANSI C89 compatible (no POSIX-specific functions used).
@@ -54,12 +56,10 @@ difficult it was - the former was the case.
  *   gcc -Wall -Wextra -Wpedantic -std=c89 -o tinytar tinytar.c
  *   Keep the name "tinytar" to distinguish it from real tar.
  *
- * Building on CP/M with HI-TECH C:
- *   Use version V3.09-17 from https://github.com/agn453/HI-TECH-Z80-C
- *   cc -v -o -n -etar.com tinytar.c
+ * Building for CP/M with Z88DK:
+ *   zcc +cpm -mz80 -v -otar.com tinytar.c
  *   This creates the file TAR.COM that resembles the std. tar commands.
  *
- *   Due to issues with fseek on files opened with "r+b" no append mode for CP/M
  *
 ```
 
@@ -80,11 +80,13 @@ can be compiled with HiTech C. This compiler is almost ANSI-C standard.
 ```
 
 Modifications and supported features
+
 ```
- * * usage: gunzip <infile> [-o | <outfile>]
- *          gunzip <infile>            - list archive status
- *          gunzip <infile> <outfile>  - unzip <infile> producing <outfile>
- *          gunzio <infile> -o         - unzip <infile> producing the original file
+ * * usage:
+ *     gunzip <infile> [-o | <outfile>]
+ *     gunzip <infile>            - list archive status
+ *     gunzip <infile> <outfile>  - unzip <infile> producing <outfile>
+ *     gunzio <infile> -o         - unzip <infile> producing the original file
  * * Writing output to a file instead of stdout allows to uncompress original binary formats.
  * * Error handling: check magic and compression mode before processing,
  *   calculate CRC32 during expanding and check against CRC32 of archive.

@@ -47,7 +47,7 @@
  * License: GPL-3.0-or-later
  */
 
-#define VERSION "20250511"
+#define VERSION "20250512"
 
 #include <ctype.h>    /* isprint */
 #include <stdio.h>    /* fopen, fread, fwrite, fclose, printf, sprintf */
@@ -98,6 +98,8 @@ void chk_ctrl_c( void ) {
         exit( -1 );
     }
 }
+#else
+#define chk_ctrl_c()
 #endif
 
 
@@ -205,6 +207,7 @@ void write_file_content( FILE *out, FILE *in, long filesize ) {
     long remaining = filesize;
 
     while ( remaining > 0 ) {
+        chk_ctrl_c();
         n = fread( record, 1, RECORD_SIZE, in );
         if ( n < RECORD_SIZE )
             memset( record + n, 0, RECORD_SIZE - n );
@@ -214,10 +217,10 @@ void write_file_content( FILE *out, FILE *in, long filesize ) {
 }
 
 
-void write_file( char *filename, long filesize, FILE *tar ) {
+void write_file( char *filename, FILE *tar ) {
     FILE *in;
     struct stat st;
-    long mtime;
+    long filesize, mtime;
 
     in = fopen( filename, "rb" );
     if ( !in ) {
@@ -235,9 +238,9 @@ void write_file( char *filename, long filesize, FILE *tar ) {
     if ( mtime <= T_19800101 ) /* no valid timestamp */
         mtime = now;
 #else
-    filesize = get_file_size( in );
     mtime = st.st_mtime;
 #endif
+    filesize = get_file_size( in );
     fprintf( stderr, "%s (%ld)\n", filename, filesize );
 
     write_tar_header( tar, filename, filesize, mtime );
@@ -246,6 +249,10 @@ void write_file( char *filename, long filesize, FILE *tar ) {
 }
 
 #ifdef __Z88DK
+#define MAX_FILES 1024
+#define CPM_NAME_SIZE 12
+char *argnames;
+uint16_t argnum;
 
 struct fcb fc_dir;
 
@@ -261,9 +268,8 @@ int dir_find_first( char *p ) {
     fc_dirpos = bdos( CPM_FFST, &fc_dir );
     /* fprintf( stderr, "dir_find_first(): %d\n", fc_dirpos ); */
     dir_current_pos = 0;
-    return ( fc_dirpos == -1
-                 ? 0x24
-                 : 0 ); /* let's simulate FLOS error code $24 (= Reached end of directory) */
+    /* let's simulate FLOS error code $24 (= Reached end of directory) */
+    return ( fc_dirpos == -1 ? 0x24 : 0 );
 }
 
 uint16_t entry_count;
@@ -271,46 +277,46 @@ uint16_t current_entry;
 
 int dir_find_next( char *p ) {
     current_entry = dir_current_pos;
-    dir_find_first( p );
-    for ( entry_count = 0; entry_count < current_entry; entry_count++ )
-        bdos( CPM_FNXT, &fc_dir );
     dir_current_pos = current_entry + 1;
     fc_dirpos = bdos( CPM_FNXT, &fc_dir );
     /* fprintf( stderr, "dir_find_next(): %d %d\n", current_entry, fc_dirpos ); */
-    return ( fc_dirpos == -1
-                 ? 0x24
-                 : 0 ); /* let's simulate FLOS error code $24 (= Reached end of directory) */
+    /* let's simulate FLOS error code $24 (= Reached end of directory) */
+    return ( fc_dirpos == -1 ? 0x24 : 0 );
 }
 
 
-char dest[ 20 ]; // temp filename buffer
+void save_entry_name( int num ) {
+    char *source, *dest;
+    source = fc_dirbuf + fc_dirpos * 32 + 1;
+    dest = argnames + num * CPM_NAME_SIZE;
+    memcpy( dest, source, CPM_NAME_SIZE );
+}
 
-int i, j;
-char *source;
 
-void patch_chars( int startpos, int endpos ) {
-    for ( i = startpos; i < endpos; i++ ) {
-        if ( source[ i ] == ' ' )
+char *get_entry_name( int num ) {
+    static char tmpnam[ 13 ]; // temp filename buffer
+    uint8_t iii;
+    char *source = argnames + num * CPM_NAME_SIZE;
+    char *dest = tmpnam;
+
+    for ( iii = 0; iii < 8; iii++ ) {
+        if ( *source == ' ' )
             break;
-        dest[ j++ ] = source[ i ] & 0x7F;
+        *dest++ = *source++ & 0x7F;
     }
-}
+    source = argnames + num * CPM_NAME_SIZE + 8;
+    if ( *source != ' ' ) {
+        *dest++ = '.';
+        *dest++ = *source++;
+        for ( iii = 9; iii < 11; iii++ ) {
+            if ( *source == ' ' )
+                break;
+            *dest++ = *source++ & 0x7F;
+        }
+    }
+    *dest = '\0';
 
-char *dir_get_entry_name() {
-    source = fc_dirbuf + fc_dirpos * 32;
-    j = 0;
-    i = 1;
-
-    patch_chars( 1, 9 );
-
-    if ( source[ 9 ] != ' ' )
-        dest[ j++ ] = '.';
-
-    patch_chars( 9, 12 );
-
-    dest[ j ] = '\0';
-
-    return dest;
+    return tmpnam;
 }
 
 #endif
@@ -346,31 +352,42 @@ void mode_create_append( int append, int argc, char *argv[] ) {
     }
 
 #ifdef __Z88DK
-    /* parse wildcard args */
+    char *filename;
+    /* create the big buffer on the stack and not in .bss (that goes into binary) */
+    char argnamesbuf[ MAX_FILES * CPM_NAME_SIZE ];
+    argnames = argnamesbuf;
+    argnum = 0;
+    /* parse wildcard args and put all raw CP/M filenames into argnames buffer*/
     for ( i = 3; i < argc; ++i ) {
         int x;
-        char *filename;
-        if ( ( x = dir_find_first( argv[ i ] ) ) != 0 )
+        if ( ( x = dir_find_first( argv[ i ] ) ) != 0 ) /* no match */
             continue;
 
-        while ( x == 0 ) {
-#ifdef CPM
+        while ( x == 0 ) { /* while match */
             chk_ctrl_c();
-#endif
-            filename = dir_get_entry_name();
-            if ( strcmp( filename, argv[ 2 ] ) ) { /* do not put this archive into this archive */
-                /* fprintf( stderr, "%s\n", filename ); */
-                write_file( filename, dir_get_entry_size(), tar );
+            if ( argnum >= MAX_FILES ) {
+                fprintf( stderr, "too many input files\n" );
+                exit( -1 );
             }
+            save_entry_name( argnum++ ); /* put raw name into big buffer */
             x = dir_find_next( argv[ i ] );
         }
     }
-#else
-    for ( i = 3; i < argc; ++i ) {
-#ifdef CPM
+    /* now process all filenames in argnames buffer */
+    for ( i = 0; i < argnum; ++i ) {
         chk_ctrl_c();
-#endif
-        write_file( argv[ i ], -1, tar );
+        filename = get_entry_name( i );        /* format raw CP/M filename */
+        if ( strcmp( filename, argv[ 2 ] ) ) { /* exclude this target archive */
+            /* fprintf( stderr, "%s\n", filename ); */
+            write_file( filename, tar );
+        }
+    }
+
+#else
+
+    for ( i = 3; i < argc; ++i ) {
+        chk_ctrl_c();
+        write_file( argv[ i ], tar );
     }
 #endif
 
@@ -398,9 +415,7 @@ void mode_list( const char *tarfile ) {
     }
 
     while ( fread( record, 1, RECORD_SIZE, fp ) == RECORD_SIZE ) {
-#ifdef CPM
         chk_ctrl_c();
-#endif
 
         if ( is_block_empty( record ) )
             break;
@@ -439,9 +454,7 @@ void mode_extract( const char *tarfile ) {
     }
 
     while ( fread( record, 1, RECORD_SIZE, tar ) == RECORD_SIZE ) {
-#ifdef CPM
         chk_ctrl_c();
-#endif
 
         if ( is_block_empty( record ) )
             break;
@@ -468,9 +481,7 @@ void mode_extract( const char *tarfile ) {
 
         remaining = filesize;
         while ( remaining > 0 ) {
-#ifdef CPM
             chk_ctrl_c();
-#endif
             to_read = remaining > RECORD_SIZE ? RECORD_SIZE : (int)remaining;
             fread( record, 1, RECORD_SIZE, tar );
             fwrite( record, 1, to_read, out );
