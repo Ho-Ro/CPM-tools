@@ -13,14 +13,14 @@ gunzip: gunzip.c Makefile
 
 
 gunzip.com: gunzip.c Makefile
-	tnylpo cc -v -n -dMYTZ=1 -e$@ $<
+	tnylpo cc -n -dMYTZ=1 -e$@ $<
 
 
-tar.com: tinytar.c Makefile
+tar.com: tar.c Makefile
 	make -C tar_work $@
 	cp tar_work/$@ .
 
-tinytar: tinytar.c Makefile
+tinytar: tar.c Makefile
 	make -C tar_work $@
 	cp tar_work/$@ .
 

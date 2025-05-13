@@ -3,10 +3,10 @@ TARGETS = tinytar tar.com
 
 all: $(TARGETS)
 
-tar.com: tinytar.c Makefile
-	zcc +cpm -v -o $@ $<
+tar.com: tar.c Makefile
+	zcc --opt-code-speed  +cpm -o $@ $<
 
-tinytar: tinytar.c Makefile
+tinytar: tar.c Makefile
 	gcc -Wall -Wextra -Wpedantic -std=c89 -o $@ $<
 
 .PHONY: clean

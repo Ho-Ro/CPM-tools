@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  *
- * tinytar.c - A minimal ANSI C89-compatible TAR archive utility.
+ * tar.c - A minimal ANSI C89-compatible TAR archive utility.
  *
  * This program implements a simplified version of the UNIX tar utility,
  * supporting the creation, listing, extraction, and appending of files
@@ -36,18 +36,18 @@
  *   CP/M and Linux with tools like KERMIT or [XYZ]MODEM.
  *
  * Building on Linux:
- *   gcc -Wall -Wextra -Wpedantic -std=c89 -o tinytar tinytar.c
+ *   gcc -Wall -Wextra -Wpedantic -std=c89 -o tinytar tar.c
  *   Keep the name "tinytar" to distinguish it from real tar.
  *
  * Building for CP/M with Z88DK:
- *   zcc +cpm -mz80 -v -otar.com tinytar.c
+ *   zcc --opt-code-speed +cpm -o tar.com tar.c
  *   This creates the file TAR.COM that resembles the std. tar commands.
  *
  * Author: Martin Homuth-Rosemann
  * License: GPL-3.0-or-later
  */
 
-#define VERSION "20250512"
+#define VERSION "20250513"
 
 #include <ctype.h>    /* isprint */
 #include <stdio.h>    /* fopen, fread, fwrite, fclose, printf, sprintf */
@@ -248,74 +248,71 @@ void write_file( char *filename, FILE *tar ) {
     fclose( in );
 }
 
+
 #ifdef __Z88DK
 #define MAX_FILES 1024
 #define CPM_NAME_SIZE 12
-char *argnames;
-uint16_t argnum;
+/*
+ * The algorithms of dir_find_first(), dir_find_next() and get_entry_name()
+ * were inspired by the source code of the z88dk library:
+ * https://github.com/z88dk/z88dk/tree/master/libsrc/target/cpm/fcntl
+ *
+ */
 
-struct fcb fc_dir;
+static struct fcb fcb;
 
-char fc_dirpos;
-char *fc_dirbuf;
-uint16_t dir_current_pos;
-char dirbuf[ 128 ];
+static char dirbuf[ 128 ];
 
-int dir_find_first( char *p ) {
-    fc_dirbuf = dirbuf;
-    bdos( CPM_SDMA, fc_dirbuf );
-    parsefcb( &fc_dir, p );
-    fc_dirpos = bdos( CPM_FFST, &fc_dir );
-    /* fprintf( stderr, "dir_find_first(): %d\n", fc_dirpos ); */
-    dir_current_pos = 0;
-    /* let's simulate FLOS error code $24 (= Reached end of directory) */
-    return ( fc_dirpos == -1 ? 0x24 : 0 );
+int8_t dir_find_first( char *p ) {
+    parsefcb( &fcb, p ); /* z88dk lib: Set the FCB parameters to the supplied name */
+    bdos( CPM_SDMA, (uint16_t)dirbuf ); /* Set DMA for directory record */
+    /*
+     * The Search For First function also initializes the Search For Next function. After
+     * the search function has located the first directory entry matching the referenced FCB,
+     * the Search For Next function can be called repeatedly to locate all remaining match-
+     * ing entries. In terms of execution sequence, however, the Search For Next call must
+     * either follow a Search For First or Search For Next call with no other intervening
+     * BDOS disk-related function calls.
+     * The Search function returns a Directory Code with the value 0 to 3 if successful,
+     * or OFFH, 255 Decimal, if a matching directory entry is not found. For successful
+     * searches, the current DMA is also filled with the directory record containing the
+     * matching entry.
+     */
+    return bdos( CPM_FFST, (uint16_t)&fcb ); /* Search For First */
 }
 
-uint16_t entry_count;
-uint16_t current_entry;
-
-int dir_find_next( char *p ) {
-    current_entry = dir_current_pos;
-    dir_current_pos = current_entry + 1;
-    fc_dirpos = bdos( CPM_FNXT, &fc_dir );
-    /* fprintf( stderr, "dir_find_next(): %d %d\n", current_entry, fc_dirpos ); */
-    /* let's simulate FLOS error code $24 (= Reached end of directory) */
-    return ( fc_dirpos == -1 ? 0x24 : 0 );
+int8_t dir_find_next( void ) {
+    /* The Search For Next function is identical to the Search For First function, except
+     * that the directory scan continues from the last entry that was matched.
+     * Function SFN returns a directory code analogous to function SFF.
+     * Note: in execution sequence, a SFN call must follow either a SFF or another SFN call
+     * with no other intervening BDOS disk-related function calls.
+     */
+    return bdos( CPM_FNXT, (uint16_t)&fcb ); /* Search For Next */
 }
 
-
-void save_entry_name( int num ) {
-    char *source, *dest;
-    source = fc_dirbuf + fc_dirpos * 32 + 1;
-    dest = argnames + num * CPM_NAME_SIZE;
-    memcpy( dest, source, CPM_NAME_SIZE );
-}
-
-
-char *get_entry_name( int num ) {
-    static char tmpnam[ 13 ]; // temp filename buffer
+char *get_entry_name( char *allargs, uint16_t num ) {
+    static char tmpnam[ 13 ]; /* temp filename buffer */
     uint8_t iii;
-    char *source = argnames + num * CPM_NAME_SIZE;
+    char *source = allargs + num * CPM_NAME_SIZE;
     char *dest = tmpnam;
 
-    for ( iii = 0; iii < 8; iii++ ) {
+    for ( iii = 0; iii < 8; ++iii ) {
         if ( *source == ' ' )
             break;
         *dest++ = *source++ & 0x7F;
     }
-    source = argnames + num * CPM_NAME_SIZE + 8;
+    source = allargs + num * CPM_NAME_SIZE + 8;
     if ( *source != ' ' ) {
         *dest++ = '.';
         *dest++ = *source++;
-        for ( iii = 9; iii < 11; iii++ ) {
+        for ( iii = 8; iii < 11; ++iii ) {
             if ( *source == ' ' )
                 break;
             *dest++ = *source++ & 0x7F;
         }
     }
     *dest = '\0';
-
     return tmpnam;
 }
 
@@ -327,7 +324,7 @@ char *get_entry_name( int num ) {
 /* ------------------------------------------------------ */
 void mode_create_append( int append, int argc, char *argv[] ) {
     FILE *tar;
-    int i;
+    int iii;
 
     if ( append ) {
         long append_pos;
@@ -352,43 +349,48 @@ void mode_create_append( int append, int argc, char *argv[] ) {
     }
 
 #ifdef __Z88DK
+    /* CP/M: do the wildcard expansion by our own */
     char *filename;
-    /* create the big buffer on the stack and not in .bss (that goes into binary) */
-    char argnamesbuf[ MAX_FILES * CPM_NAME_SIZE ];
-    argnames = argnamesbuf;
-    argnum = 0;
-    /* parse wildcard args and put all raw CP/M filenames into argnames buffer*/
-    for ( i = 3; i < argc; ++i ) {
-        int x;
-        if ( ( x = dir_find_first( argv[ i ] ) ) != 0 ) /* no match */
-            continue;
+    uint16_t argnum;
+    /* put the big buffer on the stack and not into .bss (that goes into binary) */
+    char rawargs[ MAX_FILES * CPM_NAME_SIZE ];
 
-        while ( x == 0 ) { /* while match */
+    argnum = 0;
+
+    /* 1.) parse wildcard args and put all raw CP/M filenames into buffer */
+    for ( iii = 3; iii < argc; ++iii ) {
+        int8_t dirpos;
+        if ( ( dirpos = dir_find_first( argv[ iii ] ) ) < 0 ) /* no match */
+            continue;
+        while ( dirpos >= 0 ) { /* 0..3: match */
             chk_ctrl_c();
             if ( argnum >= MAX_FILES ) {
                 fprintf( stderr, "too many input files\n" );
                 exit( -1 );
             }
-            save_entry_name( argnum++ ); /* put raw name into big buffer */
-            x = dir_find_next( argv[ i ] );
+            /* put raw (8+3) name into big buffer */
+            memcpy( rawargs + argnum++ * CPM_NAME_SIZE,
+                    dirbuf + dirpos * 32 + 1, CPM_NAME_SIZE );
+            dirpos = dir_find_next();
         }
     }
-    /* now process all filenames in argnames buffer */
-    for ( i = 0; i < argnum; ++i ) {
+
+    /* 2.) now process all filenames in argnames buffer */
+    for ( iii = 0; iii < argnum; ++iii ) {
         chk_ctrl_c();
-        filename = get_entry_name( i );        /* format raw CP/M filename */
-        if ( strcmp( filename, argv[ 2 ] ) ) { /* exclude this target archive */
-            /* fprintf( stderr, "%s\n", filename ); */
+        filename = get_entry_name( rawargs, iii ); /* format raw entry number iii to CP/M filename */
+        if ( strcmp( filename, argv[ 2 ] ) ) { /* exclude the archive target from being archived */
             write_file( filename, tar );
         }
     }
 
 #else
-
-    for ( i = 3; i < argc; ++i ) {
+    /* use the std unix wildcards */
+    for ( iii = 3; iii < argc; ++iii ) {
         chk_ctrl_c();
-        write_file( argv[ i ], tar );
+        write_file( argv[ iii ], tar );
     }
+
 #endif
 
     /* Write final two 512-byte zero blocks */
@@ -490,10 +492,11 @@ void mode_extract( const char *tarfile ) {
         fclose( out );
     }
     fclose( tar );
+    return;
 }
 
 
-void usage( char *argv0 ) {
+void usage( const char *argv0 ) {
     printf( "Tiny TAR archiving tool version %s\n", VERSION );
     printf( "Usage:\n" );
     printf( "  %s -cf archive.tar file1 [file2 ...]  # Create archive from files.\n", argv0 );
