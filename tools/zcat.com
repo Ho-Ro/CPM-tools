@@ -1,1 +1,0 @@
-/home/horo/projects/CPM/z88dk/z88dk-ext/os-related/CPM/zcat.com

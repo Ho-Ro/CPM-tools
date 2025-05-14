@@ -1,31 +1,33 @@
 
-CPMTOOLS = tar.com gunzip.com
+CPMTOOLS = tar.com gunzip.com HiTechC_tools/gunzip.com
 
 LINUXTOOLS = tinytar gunzip
 
-CFLAGS =  -Wall -Wextra -Wpedantic -std=c89
+CFLAGS = -Wall -Wextra -Wpedantic -std=c89
 
-all: $(CPMTOOLS) $(LINUXTOOLS)
+all: $(LINUXTOOLS) $(CPMTOOLS)
+
+
+tar.com: tar.c Makefile
+	zcc --opt-code-speed +cpm -o $@ $<
+
+
+gunzip.com: gunzip.c Makefile
+	zcc --opt-code-speed +cpm -DMYTZ=1 -o $@ $<
+
+
+HiTechC_tools/gunzip.com: HiTechC_tools/gunzip.c
+	make -C HiTechC_tools
+
+tinytar: tar.c Makefile
+	gcc -Wall -Wextra -Wpedantic -std=c89 -o $@ $<
 
 
 gunzip: gunzip.c Makefile
 	gcc $(CFLAGS) -o $@ $<
 
 
-gunzip.com: gunzip.c Makefile
-	tnylpo cc -n -dMYTZ=1 -e$@ $<
-
-
-tar.com: tar.c Makefile
-	make -C tar_work $@
-	cp tar_work/$@ .
-
-tinytar: tar.c Makefile
-	make -C tar_work $@
-	cp tar_work/$@ .
-
-
 .PHONY: clean
 clean:
-	make -C tar_work clean
-	-rm $(CPMTOOLS) $(LINUXTOOLS) *~
+	make -C HiTechC_tools clean
+	-rm -f $(CPMTOOLS) $(LINUXTOOLS) *~
