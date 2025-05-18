@@ -19,9 +19,17 @@
  *   Program becomes too big when using time and date functions from library, use own functions.
  *
  * * Compile for CP/M with z88dk:
- *   zcc +cpm -v --opt-code-speed -DAMALLOC -pragma-define:CRT_STACK_SIZE=1024 -ogunzip.com gunzip.c
+ *   zcc +cpm --opt-code-speed -DMYTZ=1 -o gunzip.com gunzip.c
  *   Beware, the z88dk version is slower than the HTC version.
  *   Times for uncompressing a big file (w/o write to disk) on real CP/M: HTC: 2min, z88dk: 2min 35s
+ *   Create an unbuffered test version with:
+ *   zcc +cpm --opt-code-speed -DMYTZ=1 -DUNBUFFERED -o gunzip.com gunzip.c
+ *
+ * * Usage:
+ *   gunzip <infile>              show <infile> info
+ *   gunzip <infile> <outfile>    decompress <infile> into <outfile>
+ *   gunzip <infile> -o           decompress <infile> into original file name
+ *   gunzip <infile> -n           decompress <infile>, do not create output
  *
  * The implementation was inspired by https://www.ioccc.org/1996/rcm/index.html
  *
@@ -54,6 +62,8 @@
 #include <stdint.h> /* intN_t and uintN_t */
 #include <stdlib.h> /* exit(), calloc */
 #include <string.h> /* strcmp() */
+#include <ctype.h>  /* toupper */
+
 #ifdef __unix__
 #include <time.h>
 #endif
@@ -92,11 +102,14 @@ uint8_t S[32768]; /* Dictionary == lookback buffer. */
 FILE *infile = NULL, *outfile = NULL;
 char *inname = NULL, *outname = NULL;
 
-#ifdef __Z88DK
+#if defined __Z88DK & !defined UNBUFFERED
 /* buffered writing of single bytes to file */
-#define OUTBUFSIZE 128
-uint8_t outbuf[OUTBUFSIZE];
-uint16_t outcnt = 0;
+#define BUFSIZE 128
+uint8_t inbuf[BUFSIZE];
+uint8_t outbuf[BUFSIZE];
+uint8_t incnt = 0;
+uint8_t *inp = inbuf;
+uint8_t outcnt = 0;
 #endif
 
 long bytecount;
@@ -162,8 +175,20 @@ int16_t getbyte() {
     fprintf( stderr, "<" );
     fflush( stderr );
   }
-  if ( bytecount-- )
+  if ( bytecount-- ) {
+#if defined __Z88DK & !defined UNBUFFERED
+    if ( !incnt ) { /* buffer empty, get next record */
+      incnt = fread( inbuf, 1, BUFSIZE, infile );
+      inp = inbuf;
+    }
+    if ( incnt ) { /* byte(s) available ? */
+      --incnt;
+      return *inp++;
+    }
+#else
     return getc( infile );
+#endif
+  }
   return EOF; /* C EOF */
 }
 
@@ -178,13 +203,13 @@ int16_t putbyte( int16_t b ) {
   }
   update_crc( b );
   if ( outfile ) {
-#ifdef __Z88DK
+#if defined __Z88DK & !defined UNBUFFERED
     /*
-     * HACK for z88dk: buffer the single byte writing
+     * HACK for z88dk: buffer the single byte writing to speed up
      */
     *(outbuf + outcnt) = b;
-    if ( ++outcnt == OUTBUFSIZE ) {
-      fwrite( outbuf, OUTBUFSIZE, 1, outfile );
+    if ( ++outcnt == BUFSIZE ) {
+      fwrite( outbuf, BUFSIZE, 1, outfile );
       outcnt = 0;
     }
     return b;
@@ -490,6 +515,9 @@ void errexit( char *msg ) {
 
 int main(int argc, char **argv) {
   int16_t o, q, ty, oo, ooo, oooo, f, p, x, v, h, g;
+  char *argv0 = "gunzip";
+  char opt;
+  uint8_t opt_no_out = 0, opt_orig_name = 0;
 
 #if defined __Z88DK
   /* these big arrays will be "stack"ed here to keep them out of .bss in the z88dk binary */
@@ -506,43 +534,58 @@ int main(int argc, char **argv) {
   S = S_on_stack;
 #endif
 
-  if ( argc < 2 || argc > 3 ) {
-    fprintf( stderr, "gunzip version %s\n", VERSION );
 #ifdef CPM
-/* CPM cannot access argv[0], args are converted to upper case */
-#define OPTION_N "-N"
-#define OPTION_O "-O"
-    fprintf( stderr, "usage: gunzip <infile> [-n | -o | <outfile>]\n" );
-#else
-/* handle normal UNIX cmd line args */
-#define OPTION_N "-n"
-#define OPTION_O "-o"
-    fprintf( stderr, "usage: %s <infile> [-n | -o | <outfile>]\n", argv[ 0 ] );
+/* CPM cannot access argv[0] */
+argv0 = *argv;
 #endif
+
+  /* skip argv[0] */
+  --argc;
+  ++argv;
+
+  while ( argc && ( **argv == '-' && *( *argv + 1 ) ) ) {
+      opt = *( *argv + 1 );
+      switch ( toupper( opt ) ) {
+          case 'N':
+              opt_no_out = 1;
+              break;
+          case 'O':
+              opt_orig_name = 1;
+              break;
+          default:
+              printf( "Unknown option '%c'\n", opt );
+      }
+      --argc;
+      ++argv;
+  }
+
+  if ( argc < 1 || argc > 2 ) {
+    fprintf( stderr, "gunzip version %s\n", VERSION );
+    fprintf( stderr, "usage: %s [-n | -o] <infile> [<outfile>]\n", argv0 );
     return 1 ;
   }
 
-  inname = argv[ 1 ];
+  inname = argv[ 0 ];
 
   infile = gzip_open(); /* open file and show archive info */
 
-  if ( argc == 2 ) { /* show only archive info, ready */
+  if ( argc == 1 ) { /* show only archive info, ready */
     fclose( infile );
     return 0;
   }
 
   /* no uncompressed name in gzip or no cmd line arg "-o" given  */
-  if ( !outname || strcmp( argv[2], OPTION_O ) )
-    outname = argv[ 2 ];
+  if ( argc == 2 && ( !outname || !opt_orig_name ) )
+    outname = argv[ 1 ];
 
-  if ( strcmp( argv[2], OPTION_N ) ) { /* no cmd line arg "-n" */
+  if ( opt_no_out )
+    outfile = NULL;
+  else { /* no cmd line arg "-n" */
     if ( ( outfile = fopen( outname, "wb" ) ) == NULL ) {
       perror( outname );
       return 3;
     }
   }
-  else
-    outfile = NULL;
 
   make_crc_table();
   init_crc( 0 );
@@ -741,7 +784,7 @@ int main(int argc, char **argv) {
 
   fclose( infile );
   if ( outfile ) {
-#ifdef __Z88DK
+#if defined __Z88DK & !defined UNBUFFERED
     if ( outcnt )  /* write remaining bytes in outbuf */
       fwrite( outbuf, 1, outcnt, outfile );
 #endif
