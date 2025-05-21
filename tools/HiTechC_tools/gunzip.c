@@ -19,11 +19,7 @@
  *   Program becomes too big when using time and date functions from library, use own functions.
  *
  * * Compile for CP/M with z88dk:
- *   zcc +cpm --opt-code-speed -DMYTZ=1 -o gunzip.com gunzip.c
- *   Beware, the z88dk version is slower than the HTC version.
- *   Times for uncompressing a big file (w/o write to disk) on real CP/M: HTC: 2min, z88dk: 2min 35s
- *   Create an unbuffered test version with:
- *   zcc +cpm --opt-code-speed -DMYTZ=1 -DUNBUFFERED -o gunzip.com gunzip.c
+ *   zcc +cpm --opt-code-speed=all -DMYTZ=1 -o gunzip.com gunzip.c
  *
  * * Usage:
  *   gunzip <infile>              show <infile> info
@@ -66,6 +62,9 @@
 
 #ifdef __unix__
 #include <time.h>
+#endif
+#ifdef CPM
+#include <cpm.h>
 #endif
 
 
@@ -195,14 +194,14 @@ int16_t getbyte() {
 
 int16_t putbyte( int16_t b ) {
   static int heartbeat = 1024;
-  if ( ++heartbeat >= 1024 ) {
-    chk_ctrl_c();
-    heartbeat = 0;
-    fprintf( stderr, ">" );
-    fflush( stderr );
-  }
   update_crc( b );
   if ( outfile ) {
+    if ( ++heartbeat >= 1024 ) {
+      chk_ctrl_c();
+      heartbeat = 0;
+      fprintf( stderr, ">" );
+      fflush( stderr );
+    }
 #if defined __Z88DK & !defined UNBUFFERED
     /*
      * HACK for z88dk: buffer the single byte writing to speed up
@@ -338,9 +337,11 @@ void mc_write(int16_t arg) {
 
 
 
-#if defined HI_TECH_C | defined __Z88DK
+#ifdef CPM
 
+#ifdef HI_TECH_C
 typedef long time_t;
+#endif
 
 /* gmtime() taken from z88dk lib src */
 #define SECS_PER_MINUTE ((time_t)60L)
@@ -364,9 +365,9 @@ static int is_leap( int year ) {
 
 int8_t __days_per_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 
-/* hard coded: timezone =  (GMT) */
+/* hard coded: timezone = 0 (UTC) */
 #ifndef MYTZ
-#define MYTZ 0 /* GMT */
+#define MYTZ 0 /* UTC */
 #endif
 
 char *isotime( time_t *tp ) {
@@ -376,12 +377,12 @@ char *isotime( time_t *tp ) {
 
   time_t t, secs_this_year;
 
-  int8_t sec  = 0;
-  int8_t min  = 0;
-  int8_t hour = 0;
-  int8_t mday = 1;
-  int8_t mon  = 0;
-  int year = 70;
+  uint8_t sec  = 0;
+  uint8_t min  = 0;
+  uint8_t hour = 0;
+  uint8_t mday = 1;
+  uint8_t mon  = 0;
+  uint8_t year = 70;
 
   memset( timestr, 0, 20 );
 
@@ -431,6 +432,32 @@ char *isotime( time_t *tp ) {
 
   return timestr;
 }
+
+
+uint8_t bcd2int( uint8_t bcd ) {
+    return (bcd >> 4) * 10 + (bcd & 0x0F);
+}
+
+#define UNIX2CPMDAY 2921 /* CP/M day 0 is unix day 2921 */
+#define UNIX2CPMSEC 252374400L
+
+/* return seconds since 1.1.1970 - CP/M uses localtime! */
+time_t time( time_t *tm ) {
+  struct date {
+    uint16_t day;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+  } date;
+
+  date.second = bcd2int( bdos( 105, &date ) );
+  date.minute = bcd2int( date.minute );
+  date.hour = bcd2int( date.hour );
+  date.day += UNIX2CPMDAY;
+  fprintf( stderr, "%02d:%02d:%02d\n", date.hour, date.minute, date.second );
+  return ( ( date.day * 24L + date.hour) * 60 + date.minute) * 60 + date.second;
+}
+
 #endif
 
 
@@ -517,7 +544,8 @@ int main(int argc, char **argv) {
   int16_t o, q, ty, oo, ooo, oooo, f, p, x, v, h, g;
   char *argv0 = "gunzip";
   char opt;
-  uint8_t opt_no_out = 0, opt_orig_name = 0;
+  uint8_t opt_no_out = 0, opt_orig_name = 0, opt_timing = 0;
+  time_t begin = 0, end = 0;
 
 #if defined __Z88DK
   /* these big arrays will be "stack"ed here to keep them out of .bss in the z88dk binary */
@@ -552,6 +580,9 @@ argv0 = *argv;
           case 'O':
               opt_orig_name = 1;
               break;
+          case 'T':
+              opt_timing = 1;
+              break;
           default:
               printf( "Unknown option '%c'\n", opt );
       }
@@ -559,9 +590,9 @@ argv0 = *argv;
       ++argv;
   }
 
-  if ( argc < 1 || argc > 2 ) {
+  if ( argc < 1 || argc > (opt_orig_name ? 1 : 2 ) ) {
     fprintf( stderr, "gunzip version %s\n", VERSION );
-    fprintf( stderr, "usage: %s [-n | -o] <infile> [<outfile>]\n", argv0 );
+    fprintf( stderr, "usage: %s [-n | -o] [-t] <infile> [<outfile>]\n", argv0 );
     return 1 ;
   }
 
@@ -569,7 +600,7 @@ argv0 = *argv;
 
   infile = gzip_open(); /* open file and show archive info */
 
-  if ( argc == 1 ) { /* show only archive info, ready */
+  if ( argc == 1 && !opt_orig_name && !opt_no_out ) { /* show only archive info, ready */
     fclose( infile );
     return 0;
   }
@@ -586,6 +617,9 @@ argv0 = *argv;
       return 3;
     }
   }
+
+  if ( opt_timing )
+    begin = time(NULL);
 
   make_crc_table();
   init_crc( 0 );
@@ -794,5 +828,11 @@ argv0 = *argv;
 
   if ( get_crc() != CRC32_gz )
     fprintf( stderr, "CRC error\n" );
+
+  if ( opt_timing ) {
+    end = time( NULL );
+    fprintf( stderr, "duration: %ld s\n", end - begin );
+  }
+
   return 0;
 }

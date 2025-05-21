@@ -1,5 +1,5 @@
 
-CPMTOOLS = tar.com time.com gunzip.com HiTechC_tools/gunzip.com
+CPMTOOLS = tar.com time.com gunzip.com gunzipu.com HiTechC_tools/gunzip.com
 
 LINUXTOOLS = tinytar gunzip
 
@@ -14,15 +14,15 @@ time.com: time.rel
 	cpm link $<
 
 tar.com: tar.c Makefile
-	zcc --opt-code-speed +cpm -o $@ $<
+	zcc --opt-code-speed=all +cpm -o $@ $<
 
 
 gunzip.com: gunzip.c Makefile
-	zcc --opt-code-speed +cpm -DMYTZ=1 -o $@ $<
+	zcc --opt-code-speed=all +cpm -DMYTZ=1 -o $@ $<
 
 
 gunzipu.com: gunzip.c Makefile
-	zcc --opt-code-speed +cpm -DMYTZ=1 -DUNBUFFERED -o $@ $<
+	zcc --opt-code-speed=all +cpm -DMYTZ=1 -DUNBUFFERED -o $@ $<
 
 
 HiTechC_tools/gunzip.com: HiTechC_tools/gunzip.c

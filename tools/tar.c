@@ -115,7 +115,7 @@ long octal_to_long( const char *str, int len ) {
 
 
 void long_to_octal( char *out, size_t size, long val ) {
-    snprintf( out, size, "%0*lo", (int)( size - 1 ), val );
+    sprintf( out, "%0*lo", (int)( size - 1 ), val );
     out[ size - 1 ] = '\0';
 }
 
