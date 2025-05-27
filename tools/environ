@@ -1,0 +1,3 @@
+; define the drive of the HiTech C compiler
+HITECH=C:
+TMP=O:
