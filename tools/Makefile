@@ -1,5 +1,5 @@
 
-CPMTOOLS = tar.com time.com gunzip.com
+CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com
 
 TESTTOOLS = gunzipb.com gunzipu.com
 
@@ -9,14 +9,19 @@ CFLAGS = -Wall -Wextra -Wpedantic -std=c89
 
 all: $(LINUXTOOLS) $(CPMTOOLS)
 
-time.rel: time.asm
-	cpm zsm4 =$<
+grep.com: grep.as Makefile
+	./tnylpo z80as grep.as
+	./tnylpo linq -z -ptext=100h,data,bss -c100h -ogrep.com grep.obj
 
-time.com: time.rel
-	cpm link $<
+time.com: time.asm
+	./tnylpo zsm4 =time.asm
+	./tnylpo link time
+
+tarz.com: tar.c Makefile
+	zcc --opt-code-speed=all +cpm -o $@ $<
 
 tar.com: tar.c Makefile
-	zcc --opt-code-speed=all +cpm -o $@ $<
+	tnylpo c:htc -v -o $<
 
 
 # test files to compare buffered and unbuffered fgetc() anf fputc() speed of z88dk libc
