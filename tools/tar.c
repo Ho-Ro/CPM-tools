@@ -39,8 +39,12 @@
  *   gcc -Wall -Wextra -Wpedantic -std=c89 -o tinytar tar.c
  *   Keep the name "tinytar" to distinguish it from real tar.
  *
- * Building for CP/M with Z88DK:
+ * Cross-building for CP/M with Z88DK:
  *   zcc --opt-code-speed +cpm -o tar.com tar.c
+ *   This creates the file TAR.COM that resembles the std. tar commands.
+ *
+ * Building on CP/M with HiTech C compiler (needs version 3.09-19 or later):
+ *   C309-19 -V -O TAR.C
  *   This creates the file TAR.COM that resembles the std. tar commands.
  *
  * Author: Martin Homuth-Rosemann
