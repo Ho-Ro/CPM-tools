@@ -47,13 +47,21 @@
  * License: GPL-3.0-or-later
  */
 
-#define VERSION "20250513"
+#define VERSION "20250603"
 
 #include <ctype.h>    /* isprint */
 #include <stdio.h>    /* fopen, fread, fwrite, fclose, printf, sprintf */
 #include <stdlib.h>   /* wcmatch, malloc, free, exit */
 #include <string.h>   /* strncpy, memset, strlen */
+#ifndef HI_TECH_C
 #include <sys/stat.h> /* for stat, struct stat, S_IFREG */
+#else
+#define const
+#define false 0
+#define true (!false)
+#define S_ISREG(x) true
+#include <stat.h> /* for stat, struct stat, S_IFREG */
+#endif
 #include <time.h>     /* time_t */
 #ifdef CPM
 #include <cpm.h>
@@ -111,12 +119,6 @@ long octal_to_long( const char *str, int len ) {
         ++str;
     }
     return value;
-}
-
-
-void long_to_octal( char *out, size_t size, long val ) {
-    sprintf( out, "%0*lo", (int)( size - 1 ), val );
-    out[ size - 1 ] = '\0';
 }
 
 
@@ -179,11 +181,11 @@ void write_tar_header( FILE *out, const char *filename, long filesize, long mtim
 
     memset( &header, 0, sizeof( header ) );
     strncpy( header.name, filename, 100 );
-    long_to_octal( header.mode, 8, 0644 );
-    long_to_octal( header.uid, 8, 1000 );
-    long_to_octal( header.gid, 8, 1000 );
-    long_to_octal( header.size, 12, filesize );
-    long_to_octal( header.mtime, 12, mtime );
+    sprintf( header.mode, "%07o", 0644 );
+    sprintf( header.uid, "%07o", 1000 );
+    sprintf( header.gid, "%07o", 1000 );
+    sprintf( header.size, "%011lo", filesize );
+    sprintf( header.mtime, "%011lo", mtime );
     memset( header.chksum, ' ', 8 );
     header.typeflag = '0';
     strncpy( header.magic, "ustar  ", 8 );
