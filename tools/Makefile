@@ -1,7 +1,7 @@
 
 CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com
 
-TESTTOOLS = gunzipb.com gunzipu.com
+TESTTOOLS = gunzipb.com gunzipu.com grep_tst.com
 
 LINUXTOOLS = tinytar gunzip
 
@@ -12,6 +12,11 @@ all: $(LINUXTOOLS) $(CPMTOOLS)
 grep.com: grep.as Makefile
 	./tnylpo z80as grep.as
 	./tnylpo linq -z -ptext=100h,data,bss -c100h -ogrep.com grep.obj
+
+# test file for simpler CP/M build
+grep_tst.com: grep_tst.as Makefile
+	./tnylpo zas grep_tst.as
+	./tnylpo linq -z -c100h -ogrep_tst.com grep_tst.obj
 
 time.com: time.asm
 	./tnylpo zsm4 =time.asm
@@ -42,6 +47,10 @@ tinytar: tar.c Makefile
 
 gunzip: gunzip.c Makefile
 	gcc $(CFLAGS) -o $@ $<
+
+
+.PHONY: testtools
+testtools: $(TESTTOOLS)
 
 
 .PHONY: clean
