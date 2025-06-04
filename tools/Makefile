@@ -1,5 +1,5 @@
 
-CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com
+CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com be.com
 
 TESTTOOLS = gunzipb.com gunzipu.com grep_tst.com
 
@@ -27,6 +27,9 @@ tarz.com: tar.c Makefile
 
 tar.com: tar.c Makefile
 	tnylpo c:htc -v -o $<
+
+be.com: be.c Makefile
+	tnylpo c:htc -v -o -n $<
 
 
 # test files to compare buffered and unbuffered fgetc() anf fputc() speed of z88dk libc
