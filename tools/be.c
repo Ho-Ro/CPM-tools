@@ -30,9 +30,9 @@
  */
 
 /**************************************************************************
-* 
+*
 * Small change to allow-it to be run on CP/M 2.2 (instead of CP/M 3)
-* 
+*
 * Adapted it to be compiled by HiTech C v3.09 compiler
 *
 * Changed the screen size to 48 lines x 80 columns (instead of 25 x 80)
@@ -109,22 +109,22 @@ char *key[] = {
 };
 
 char *help[] = {
-   "^J  Help (this)",
-   "^E  Row up     ",
-   "^X  Row down   ",
-   "^S  Col left   ",
-   "^D  Col right  ",
-   "^R  Page up    ",
-   "^C  Page down  ",
-   "^T  Top        ",
-   "^V  Bottom     ",
-   "^A  HEX mode   ",
-   "^F  ASCII mode ",
-   "^Z  Toggle mode",
-   "^W  Write file ",
-   "ESC Quit       ",
-   "               ",
-   "               "
+   "^J      Help (this)",
+   "^E      Row up     ",
+   "^X      Row down   ",
+   "^S      Col left   ",
+   "^D      Col right  ",
+   "^R      Page up    ",
+   "^C      Page down  ",
+   "^T      Top        ",
+   "^V      Bottom     ",
+   "^A      HEX mode   ",
+   "^F      ASCII mode ",
+   "^Z      Toggle mode",
+   "^W      Write file ",
+   "ESC ESC Quit       ",
+   "                   ",
+   "                   "
 };
 
 char fname[MAX_FNAME];      /* Filename                                     */
@@ -212,7 +212,7 @@ unsigned int edLoop(void) {
     sysHead();
     edResetChanges();
     edUpdAll();
-    while (1) {
+    for (;;) {
         sysInfo();
         edPosCur();
         ch = keyPressed();
@@ -243,8 +243,10 @@ unsigned int edLoop(void) {
         else if (ch == *key[13])
             fileWrite();
         else if (ch == *key[14]) {
-            fileQuit();
-            return 0;
+            if ( keyPressed() == *key[14] ) {
+                fileQuit();
+                return 0;
+            }
         /* *key[15] and *key[16] are free to use */
         }
         else
