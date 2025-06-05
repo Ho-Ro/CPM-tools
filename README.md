@@ -136,7 +136,9 @@ Lists the files containing the specified string
 
 Binary editor, written by [Lars Lindehaven](https://github.com/lindehaven/CP-M/tree/master/be) for CP/M 3 and adapted
 by [Ladislau Szilagyi](https://github.com/Laci1953/RC2014-CPM/tree/main/System/BinaryEditor), who fixed it for CP/M 2.2 and adapted it for the HiTech C compiler.
-BE enables hexadecimal and ASCII editing of binary files up to 37.5 KB (0x9600) in size.
+BE enables hexadecimal and ASCII editing of binary files up to 37 KB (0x9400) in size.
+
+I removed some K&R syntax and improved the screen refresh speed.
 
 ## unzip
 

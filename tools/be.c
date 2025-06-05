@@ -43,22 +43,23 @@
 *
 **************************************************************************/
 
-#include "ctype.h"
-#include "stdlib.h"
-#include "stdio.h"
-#include "conio.h"
-#include "string.h"
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <conio.h>
+#include <string.h>
+#include <stdint.h>
 
 /* DEFINITIONS ------------------------------------------------------------ */
 
 #define PROG_NAME   "Binary Editor"
 #define PROG_AUTH   "Lars Lindehaven"
-#define PROG_VERS   "v0.1.6 2022-09-13"
+#define PROG_VERS   "v0.1.6a 2025-06-15"
 #define PROG_SYST   "CP/M"
 
 #define WORDBITS    16                              /* # of bits in a word  */
 #define MAX_FNAME   16                              /* Max filename length  */
-#define MAX_WHERE   2400                            /* Max change info size */
+#define MAX_WHERE   0x940                           /* Max change info size */
 #define MAX_BYTES   (MAX_WHERE * WORDBITS)          /* Max byte buffer size */
 
 #define ED_ROWS     32                              /* # of rows            */
@@ -129,26 +130,26 @@ char *help[] = {
 
 char fname[MAX_FNAME];      /* Filename                                     */
 unsigned int eatop = 0;              /* Address on top row in editor                 */
-unsigned int aoffs = 0x0100;         /* Offset when displaying address               */
-unsigned int erow = 0;               /* Row in editor                                */
-unsigned int ecol = 0;               /* Column in editor                             */
-unsigned int eascii = 0;             /* Edit mode: 0 (HEX) or 1 (ASCII)              */
+unsigned int aoffs = 0x0000;         /* Offset when displaying address               */
+uint8_t erow = 0;                    /* Row in editor                                */
+uint8_t ecol = 0;                    /* Column in editor                             */
+uint8_t eascii = 0;                  /* Edit mode: 0 (HEX) or 1 (ASCII)              */
 unsigned int bcurr = 0;              /* Current position in byte buffer              */
 unsigned int bsize = 0;              /* Size of byte buffer                          */
 unsigned int bchanges = 0;           /* # of changes made in byte buffer             */
 unsigned int bwhere[MAX_WHERE];      /* Where changes have been made                 */
-char bbuff[MAX_BYTES];      /* Byte buffer (maximum 32767 bytes)            */
+uint8_t bbuff[MAX_BYTES];            /* Byte buffer (maximum 32767 bytes)            */
 
 
 /* PROGRAM ---------------------------------------------------------------- */
-unsigned int     edLoop(void);
+uint8_t edLoop(void);
 void    edPosCur(void);
 void    edInput(char ch);
-int     edHex2Nibble(char ch);
-void    edSetChange(unsigned int bindex);
-unsigned int     edIsChanged(unsigned int bindex);
+int     edHex2Nibble(uint8_t ch);
+void    edSetChange(uint16_t bindex);
+uint8_t edIsChanged(uint16_t bindex);
 void    edResetChanges(void);
-void    edUpd(unsigned int fromrow, unsigned int nrows);
+void    edUpd(uint8_t fromrow, uint8_t nrows);
 void    edUpdAll(void);
 void    edHelp(void);
 void    rowUp(void);
@@ -159,23 +160,23 @@ void    pageUp(void);
 void    pageDown(void);
 void    buffTop(void);
 void    buffBottom(void);
-unsigned int     fileRead(void);
-unsigned int     fileWrite(void);
+int8_t  fileRead(void);
+int8_t  fileWrite(void);
 void    fileQuit(void);
 void    sysTitle(void);
 void    sysInfo(void);
 void    sysHead(void);
 void    sysMsg(char* s);
-unsigned int     sysMsgKey(char* s);
+uint8_t sysMsgKey(char* s);
 void    scrClr(void);
-void    scrPosCur(unsigned int row, unsigned int col);
+void    scrPosCur(uint8_t row, uint8_t col);
 void    scrClrEol(void);
-void    scrClrRow(unsigned int row);
+void    scrClrRow(uint8_t row);
 void    scrInvVideo(void);
 void    scrNorVideo(void);
 void    scrHideCursor(void);
 void    scrShowCursor(void);
-unsigned int     keyPressed(void);
+uint8_t keyPressed(void);
 
 int main(int argc, char* argv[]) {
     int rc = 0;
@@ -205,7 +206,7 @@ int main(int argc, char* argv[]) {
 /* EDITING ---------------------------------------------------------------- */
 
 /* Main editor loop */
-unsigned int edLoop(void) {
+uint8_t edLoop(void) {
     unsigned int ch;
 
     sysTitle();
@@ -263,7 +264,7 @@ void edPosCur(void) {
 }
 
 /* Edit current line */
-void edInput(ch) char ch; {
+void edInput(char ch) {
     int hi, lo, new;
 
     if (eascii) {
@@ -292,7 +293,7 @@ void edInput(ch) char ch; {
 }
 
 /* Convert hexadecimal to nibble (0-15) */
-int edHex2Nibble(ch) char ch; {
+int edHex2Nibble(uint8_t ch) {
     if (ch >= '0' && ch <= '9')
         return (ch - '0');
     else if (ch >= 'A' && ch <= 'F')
@@ -304,7 +305,7 @@ int edHex2Nibble(ch) char ch; {
 }
 
 /* Store number of changes and where they have been made  */
-void edSetChange(bindex) unsigned int bindex; {
+void edSetChange(uint16_t bindex) {
     if (!edIsChanged(bindex)) {
         bwhere[bindex / WORDBITS] |= 1 << bindex % WORDBITS;
         bchanges += 1;
@@ -312,8 +313,13 @@ void edSetChange(bindex) unsigned int bindex; {
 }
 
 /* Check if byte is changed */
-unsigned int edIsChanged(bindex) unsigned int bindex; {
-    return ((bwhere[bindex / WORDBITS] >> bindex % WORDBITS) & 1);
+uint8_t edIsChanged(uint16_t bindex) {
+    if ( bchanges ) { /* any changes? */
+        uint16_t bline = bwhere[ bindex >> 4 ];
+        if ( bline ) /* change in this line? */
+            return ( bline >> ( bindex & 0x0f ) ) & 1;
+    }
+    return 0; /* nope */
 }
 
 /* Reset number of changes and where they have been made  */
@@ -326,26 +332,39 @@ void edResetChanges(void) {
 }
 
 /* Update all columns on row(s) on editor screen */
-void edUpd(fromrow, nrows) unsigned int fromrow, nrows; {
+void edUpd(uint8_t fromrow, uint8_t nrows) {
     unsigned int r, c, i;
+    unsigned char *bp;
 
     for (r = fromrow; r < fromrow + nrows && r < ED_ROWS; r++) {
         scrClrRow(ED_ROWT + r);
-        scrPosCur(ED_ROWT + r, ED_CLM);
-        printf("%04x", aoffs + eatop + r * ED_COLS);
-        for (c = 0; c < ED_COLS; c++) {
-            i = eatop + r * ED_COLS + c;
-            scrPosCur(ED_ROWT + r, ED_CHL + ED_CHW * c);
+        scrPosCur(ED_ROWT + r, ED_CLM); /* go to beginning of line */
+        printf("%04x    ", aoffs + eatop + r * ED_COLS);
+        /* update the hex line */
+        i = eatop + r * ED_COLS;
+        bp = bbuff + i;
+        for (c = 0; c < ED_COLS; ++c, ++i, ++bp) {
+            if (edIsChanged(i)) {
+                scrInvVideo();
+                printf("%02x ", *bp);
+                scrNorVideo();
+            } else {
+                printf("%02x ", *bp);
+            }
+        }
+        printf("    "); /* skip over to ascii */
+        /* now update ascii line */
+        i = eatop + r * ED_COLS;
+        bp = bbuff + i;
+        for (c = 0; c < ED_COLS; ++c, ++i, ++bp) {
             if (edIsChanged(i))
                 scrInvVideo();
-            printf("%02x", (unsigned char)bbuff[i]);
-            scrPosCur(ED_ROWT + r, ED_CAL + ED_CAW * c);
-            if (bbuff[i] > 0x1f && bbuff[i] < 0x7f)
-                putchar(bbuff[i]);
+            if (*bp > 0x1f && *bp < 0x7f)
+                putchar(*bp);
             else
                 putchar('.');
             if (edIsChanged(i))
-                scrNorVideo();
+            scrNorVideo();
         }
     }
 }
@@ -493,7 +512,7 @@ void buffBottom(void) {
 /* FILE I/O --------------------------------------------------------------- */
 
 /* Read file to byte buffer */
-unsigned int fileRead(void) {
+int8_t fileRead(void) {
     FILE *fp;
     unsigned int i;
 
@@ -516,7 +535,7 @@ unsigned int fileRead(void) {
 }
 
 /* Write byte buffer to file */
-unsigned int fileWrite(void) {
+int8_t fileWrite(void) {
     FILE *fp;
     unsigned int bytes;
 
@@ -606,7 +625,7 @@ void sysMsg(s) char *s; {
 }
 
 /* Print message on system line and wait for a key press */
-unsigned int sysMsgKey(s) char *s; {
+uint8_t sysMsgKey(char *s) {
     unsigned int ch;
 
     scrInvVideo();
@@ -626,7 +645,7 @@ void scrClr(void) {
 }
 
 /* Move cursor to row, col */
-void scrPosCur(row, col) unsigned int row, col; {
+void scrPosCur(uint8_t row, uint8_t col) {
     printf("\x1b[%d;%dH", row+1, col+1);
 }
 
@@ -636,7 +655,7 @@ void scrClrEol(void) {
 }
 
 /* Move cursor to row and clear line */
-void scrClrRow(row) unsigned int row; {
+void scrClrRow(uint8_t row) {
     scrPosCur(row, 0);
     scrClrEol();
 }
@@ -662,7 +681,7 @@ void scrShowCursor(void) {
 }
 
 /* CP/M KEYBOARD ---------------------------------------------------------- */
-unsigned int keyPressed(void)
+uint8_t keyPressed(void)
 {
     return getch();
 }
