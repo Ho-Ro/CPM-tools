@@ -4,8 +4,21 @@ that are either difficult to find or customised by me or are completely new.
 Some software was created during [hacking the BIOS of my Z80-MBC2](https://github.com/Ho-Ro/Z80-MBC2)
 (e.g. to add a high speed double SIO), other was written just for fun.
 
-Most tools use either [HiTech C (version 3.09-19) from agn453](https://raw.githubusercontent.com/agn453/HI-TECH-Z80-C/master/htc-bin.lbr) (provided here for completeness) or a Z80 assembler/linker ZSM4/LINK.
+Most tools use either [HiTech C (version 3.09-19) from agn453](https://github.com/agn453/HI-TECH-Z80-C/tree/master/dist) (provided here for completeness) or the Z80 assembler/linker ZSM4/LINK or ZMAC/ZML.
 The Pascal tools need an unmodified Turbo Pascal 3.
+
+## diskedit
+
+Disk editor for CP/M 3, written in Turbo Pascal by
+[Gerhard Strube](https://mark-ogden.uk/mirrors/www.cirsovius.de/CPM/Projekte/Artikel/TP/DirDisk/DirDisk.html).
+I added track formatting and timestamp preparation for the directory track(s) and improved the user interface.
+
+## make
+
+This program is a slightly simplified clone of the UNIX utility of the same name.
+Dependancy information is extracted from a makefile and acted upon.
+This version requires CP/M-80 version 3.0 ("CP/M PLUS") with time-of-day-clock implemented.
+Also the file timestamps must be "turned on". Current time-of-day call to CP/M is also used.
 
 ## tar
 
@@ -103,7 +116,7 @@ Modifications and supported features
 
 ## grep
 
-Based on [grep.as](https://github.com/Laci1953/RC2014-CPM/blob/main/System/grep/grep.as) with minor modifications for easy build on CP/M using [z80as](https://github.com/Laci1953/HiTech-C-compiler-enhanced/tree/main/Z80AS) and linq from HiTech C.
+Based on [grep.as](https://github.com/Laci1953/RC2014-CPM/blob/main/System/grep/grep.as) with minor modifications for easy build on CP/M using [z80as](https://github.com/Laci1953/HiTech-C-compiler-enhanced/tree/main/Z80AS) and `linq` from HiTech C.
 
 ```
 z80as grep.as
@@ -118,3 +131,29 @@ Lists the files containing the specified string
 ( ambiguous file references may be used, e.g. *.c or test?.asm )
 ( up to 512 files can be searched )
 ```
+
+## be
+
+Binary editor, written by [Lars Lindehaven](https://github.com/lindehaven/CP-M/tree/master/be) for CP/M 3 and adapted
+by [Ladislau Szilagyi](https://github.com/Laci1953/RC2014-CPM/tree/main/System/BinaryEditor), who fixed it for CP/M 2.2 and adapted it for the HiTech C compiler.
+BE enables hexadecimal and ASCII editing of binary files up to 37.5 KB (0x9600) in size.
+
+## unzip
+
+Slightly modification of [UNZIP187.Z80](https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/UNZIP187.Z80).
+
+This version of `UNZIP` now can extract all files from MS-DOS and Linux ZIP files.
+The addition of the UnDeflate decompression method make this possible since
+previous versions could not handle Deflated files. Additionally it sets
+the date stamp of the extracted file is the OS supports date stamping.
+
+Usage Syntax:
+
+    UNZIP {d:}zipfile {d:}{afn}
+
+If no destination drive is given, member files are checked and listed that match `afn`.
+If a destination drive is given, member files are extracted that match `afn` if given,
+otherwise all member files are extracted.
+This follows the syntax used by for example UNARC.
+
+

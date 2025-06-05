@@ -1,3 +1,5 @@
+; SPDX-License-Identifier: Unlicense
+;
 ; UNZIP.Z80
 ;
 ;	Dissolves all MS-DOS ZIP files.
@@ -301,7 +303,7 @@ pban:	call	ilprt
 	db	'UNZIP Version '
 	db	Vers/10+'0','.',Vers mod 10+'0'
 	db	'-',Revisn mod 10+'0'	;;v1.8-n identify revision
-	db	' - DPG',CR,LF,0
+	db	' - Ho-Ro',CR,LF,0
 	ld	a,(dfcb+1)	; filename?
 	cp	' '
 	jp	z,usage
@@ -2592,13 +2594,20 @@ usage:	call	ilprt
 usage2:	call	ilprt
 	db	':}zipfile {d',0
 	pop	af
+	push	af
 	jr	z,usage3
 	call	ilprt
 	db	'ir',0
 usage3:	call	ilprt
 	db	':}{afn.typ}',CR,LF
-	db	'If a destination is given, files are extracted.',CR,LF
-	db	'If not, files are checked and listed.',0
+	db	'If a destination d',0
+	pop	af
+	jr	z,usage4
+	call	ilprt
+	db	'ir',0
+usage4:	call	ilprt
+	db	': is given, matching files are extracted.',CR,LF
+	db	'If not, matching files are checked and listed.',0
 	jp	exit
 ;
 ; opsiz - output uncompressed and compressed file size as 7 
