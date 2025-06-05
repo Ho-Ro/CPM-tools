@@ -175,7 +175,7 @@ TRUE	equ	not FALSE
 ;
 ; conditional assembly equates
 ;
-debug	equ	true		; set true to reduce I/O buffers
+debug	equ	false		; set true to reduce I/O buffers
 				; to 256 bytes so that there is enough
 				; free TPA to run a debugger
 SLRlibs	equ	false		; set true to link with SLR compatible 
@@ -692,7 +692,7 @@ mtchex:	call	setout		; log output drive/user
 ;	add	hl,de
 ;	call	vpstr
 	call	ilprt
-	db	'xxxxxxxx',0
+	db	' xxxxxxxx',0
 ; print version, date and time
 	call	opver
 	call	ilprt
