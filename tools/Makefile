@@ -1,5 +1,5 @@
 
-CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com be.com unzip.com
+CPMTOOLS = tar.com tarz.com time.com gunzip.com grep.com be.com unzip.com zip.com zipdir.com
 
 TESTTOOLS = gunzipb.com gunzipu.com grep_tst.com
 
@@ -37,6 +37,16 @@ unzip.com: unzip.z80 Makefile
 	tnylpo zml unzip
 	rm -f unzip.rel
 
+zip.com: zip.z80 Makefile
+	tnylpo zmac zip
+	tnylpo zml zip
+	rm -f zip.rel
+
+zipdir.com: zipdir.z80 Makefile
+	tnylpo zsm4 =zipdir.z80
+	tnylpo link zipdir
+	rm -f zipdir.rel
+
 # test files to compare buffered and unbuffered fgetc() anf fputc() speed of z88dk libc
 gunzipb.com: gunzip.c Makefile
 	zcc --opt-code-speed=all +cpm -DMYTZ=1 -o $@ $<
@@ -63,4 +73,9 @@ testtools: $(TESTTOOLS)
 
 .PHONY: clean
 clean:
-	-rm -f $(CPMTOOLS) $(LINUXTOOLS) $(TESTTOOLS) *.sym *~
+	-rm -f *.err *.sym *~
+
+
+.PHONY: distclean
+distclean: clean
+	-rm -f $(CPMTOOLS) $(LINUXTOOLS) $(TESTTOOLS)

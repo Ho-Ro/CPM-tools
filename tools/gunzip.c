@@ -1,4 +1,6 @@
-/* muzcat_simple.c -- decompression filter in simple, portable C
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * muzcat_simple.c -- decompression filter in simple, portable C
  * by pts@fazekas.hu at Tue Jun 16 16:50:24 CEST 2020
  *
  * This tool is a slow drop-in replacmeent of zcat (gzip -cd), without error

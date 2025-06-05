@@ -1,3 +1,5 @@
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
 ; get CP/M 3 date/time structure and display the time as HH:MM:SS
 ; using BDOS FUNCTION 105: GET DATE AND TIME
 ; input:

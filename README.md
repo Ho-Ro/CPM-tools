@@ -156,4 +156,27 @@ If a destination drive is given, member files are extracted that match `afn` if 
 otherwise all member files are extracted.
 This follows the syntax used by for example UNARC.
 
+## zip
+
+Built from unmodified source code of [UNZIP187.Z80](https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/UNZIP187.Z80).
+
+```
+ZIP    v1.01 - JGH 08-Dec-2023
+Usage: ZIP <zipfile>name[.zip] <afn> [/OQ]
+Options:
+  Q - Quiet
+  O - Overwrite existing file
+  / - Print this helP
+Eg: ZIP OUT.ZIP *.COM
+    ZIP ALLFILES.ZIP *.*
+```
+
+## zipdir
+
+Built from unmodified source code of [ZIPDIR15.Z80](https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/ZIPDIR15.Z80).
+
+```
+ZIPDIR v1.50 - JGH 20/02/2021
+Usage: ZIPDIR <zipfile>[.zip]
+```
 
