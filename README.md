@@ -4,7 +4,7 @@ that are either difficult to find or customised by me or are completely new.
 Some software was created during [hacking the BIOS of my Z80-MBC2](https://github.com/Ho-Ro/Z80-MBC2)
 (e.g. to add a high speed double SIO), other was written just for fun.
 
-Most tools use either [HiTech C (version 3.09-19) from agn453](https://github.com/agn453/HI-TECH-Z80-C/tree/master/dist) (provided here for completeness) or the Z80 assembler/linker ZSM4/LINK or ZMAC/ZML.
+Most tools use either [HiTech C (version 3.09-19) from agn453](https://github.com/agn453/HI-TECH-Z80-C/tree/master/dist) (provided here for completeness) or the Z80 assembler/linker MAC/LOAD, ZSM4/LINK or ZMAC/ZML.
 The Pascal tools need an unmodified Turbo Pascal 3.
 
 ## diskedit
@@ -182,3 +182,32 @@ ZIPDIR v1.50 - JGH 20/02/2021
 Usage: ZIPDIR <zipfile>[.zip]
 ```
 
+## u3
+
+This tool addresses two major shortcomings of CP/M. While it is easy to copy
+files between user areas using `PIP`, CP/M does not provide a standard tool
+for moving files from one user area to another. Similarly, it is not possible
+by default to recover deleted files. For both tasks, a low-level disk editor
+had to be used – a highly error-prone undertaking.
+
+
+`U3.COM` - CP/M Plus utility for recovering erased files and for changing
+the user area of a file, based on the public domain `UNERASE.COM`.
+It works with sector sizes of 128, 256 512, 1024, 2048 and 4096 bytes.
+
+U3 DOES NOT DOES NOT WORK WITH VERSIONS OF CP/M PRIOR TO CP/M 3.0.
+
+The U3 command line takes the form:
+
+    U3 [d:]afn.aft [user area]
+
+If a user area is specified, U3 moves all files in the current user area
+on drive d: (or the default drive if d: is not specified) that match `afn.aft`,
+and places them in the specified user area.
+
+If no user area is specified, `U3` recovers all erased files on drive d:
+(or the default drive if d: is not specified) that match `afn.aft`, and
+moves them to the current user area.
+
+Accidentally deleted files should be undeleted immediately so that the disk
+space used by the file is not overwritten by other disk operations.
