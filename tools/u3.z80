@@ -1,0 +1,586 @@
+; U3 - CP/M PLUS UTILITY FOR RECOVERING ERASED FILES AND FOR
+; CHANGING THE USER AREA OF A FILE. This program is based on
+; UNERASE.COM in the public domain. It has been modified to
+; work with CP/M 3.0 and later, to change the user area of a
+; file, and to accept ambiguous files names. It currently
+; works with sector sizes of 128, 256 512 and 1024 bytes. It
+; is placed in the public domain by Advanced Logic Systems for
+; public use. Advanced Logic Systems makes no warrantee on the
+; operation or use of this program or its applicability for any
+; given application.
+; U3 DOES NOT DOES NOT WORK WITH VERSIONS OF CP/M PRIOR TO CP/M 3.0
+; The U3 command line takes the form:
+;
+;		U3 [d:]afn.aft [user area]
+;
+; If no user area is specified U3 recoverers all erased files on
+; drive d: (or the default if d: is not specified) matching
+; afn.aft and places them is the current user area. If a user area
+; is specified U3 moves all files in the current user area on
+; drive d: (or the default if d: is not specified) matching
+; afn.aft to the specified user area.
+; Versions 1.01 and 1.02 of U3 were prepared by R. Saeks from
+; Gale Wolfenbarger's code for version 1.00. Comments regarding
+; these revisions may be passed to the author by leaving a
+; message on either the
+;
+;		Mesilla Valley RCP/M | (505)-524-6920
+; or the
+;	  Lost Dutchman's Gold Mine RCP/M | (602)-848-6708
+
+;	HISTORY
+;08/04/2026	Convert source to Z80, max sector size is 8192 byte.
+;Ver. 1.04	- Martin Homuth-Rosemann
+;05/04/2026	Extend the sector size up to 4096 byte for yaze-ag.
+;Ver. 1.03	- Martin Homuth-Rosemann
+;12/24/84	REVISED CODE TO PERMIT U3 TO BE USED TO EITHER
+;Ver. 1.02	RECOVER AN ERASED FILE OR CHANGE THE USER AREA
+;		OF A FILE. ADDED AMBIGUOUS FILE SPECIFICATIONS
+;		REVISED CODE TO WORK ON DISKS WITH
+;		MORE THAN ONE DIRECTORY TRACK. MOVED CPM 3.0
+;		VERSION CHECK CODE TO BEGINNING OF CODE AND
+;		CORRECTED ERROR TEST IN NODEF. - R. SAEKS
+;06/16/84       REVISED TO WORK WITH 1024 BYTE SECTORS AND TO PLACE
+;Ver. 1.01      RECOVERED FILES IN CURRENTLY LOGGED USER AREA.
+;               - R. SAEKS
+;12/29/83	FIRST PASS AT DISASSEMBLY OF UNERASE.COM AND MODIFICATIONS
+;Ver. 1.00	TO MAKE IT COMPATIBLE WITH CP/M PLUS
+;		I ALSO DID A SELECT DISK IN DSKPRM SO THAT IF YOU TRY TO 
+;		RECOVER A FILE FROM A DISK THAT IS A DIFFERENT FORMAT FROM
+;		THE ONE THAT YOU ARE CURRENTLY LOGGED ON TO, ITS GETS THE 
+;		RIGHT DPH.  AT THE SAME TIME I CHANGED THE SIZE OF THE AREA
+;		WHERE THE NUMBER OF RESERVED SYSTEM TRACKS IS KEPT.  THIS 
+;		ALLOWS THE NUMBER OF RESERVED TRACKS TO BE GREATER THAN 256.
+;		- GALE WOLFENBARGER
+
+;	ADDRESSES
+BDOS	EQU	05H		;BDOS VECTOR ADDRESS
+WRMBOOT	EQU	00H		;WARM BOOT VECTOR ADDRESS
+DEFFCB	EQU	5CH		;ADDRESS OF THE DEFAULT FCB
+DEFFCB2	EQU	6CH		;ADDRESS OF THE SECOND DEFAULT FCB
+
+;	BDOS FUNCTIONS
+DIRCALL	EQU	32H		;CPM 3.0 DIRECT BIOS CALL
+DRESET	EQU	0DH		;RESET DISK SYSTEM
+GETCUR	EQU	19H		;GET CURRENTLY LOGGED IN DISK
+GETUSR	EQU     20H             ;GET CURRENT USER
+CONIN	EQU	01H		;GET A CHARACTER FROM THE CONSOLE
+CONOUT	EQU	02H		;PRINT A CHARACTER TO THE CONSOLE
+SETDMA	EQU	1AH		;SET DMA FUNCTION
+GETVER	EQU	0CH		;GET CPM VERSION #
+GETPARM	EQU	1FH		;GET ADDRESS OF DISK PARAMETERS
+PRINT	EQU	09H		;PRINT STRING TO CONSOLE
+
+;	ASCII CHARACTERS
+CR	EQU	0DH		;CARRIAGE RETURN
+LF	EQU	0AH		;LINE FEED
+
+
+	cseg
+	jr	START
+
+	DB	'U3 ver 1.04 '
+	DB	'FOR CPM 3.0 '
+	DB	'12/29/83 - gw '
+	DB      'Rev 06/16/84, 12/24/84 - rs  '
+	DB      'Rev 05/04/2026, 08/04/2026 - horo '
+
+START:
+	ld	sp,STACK
+	call	SETUP
+	call	RDDIR
+	call	FINISH
+	jp	WRMBOOT
+
+SETUP:
+	call	CKVERS		;CHECK FOR CPM 3.0 OR LATER
+	call	CKNAME		;CHECK FOR VALID FILE NAME
+	call	SETSRCDST	;SET SOURCE AND DESTINATION USERS
+	jp	SETBIOS 	;COPY BIOS JUMP VECTOR
+
+RDDIR:
+	call	GETDIR		;READ A DIRECTORY SECTOR
+	ret	z		;END OR READ ERROR
+	call	CKENT		;CHECK ENTRIES FOR FILE
+	jr	RDDIR
+
+FINISH:
+	ld	c,DRESET	;RESET DISK SYSTEM
+	call	BDOS
+	ld	a,(NOREC)	;GET NUMBER of DIR FOUND
+	or	a,a
+	jr	z,NOTFND	;NON FOUND
+	ld	a,(SRCUSR)
+	cp	a,0E5H
+	jr	z,RECOVMSG
+	ld	de,CHGMSG
+	jp	PRTMSG
+
+RECOVMSG:
+	ld	de,RECMSG
+	jp	PRTMSG		;PRINT SUCCESS MESSAGE
+
+NOTFND:
+	ld	de,FILERR
+	jp	PRTMSG
+
+CKVERS:
+	ld	c,GETVER	;GET CPM VERSION #
+	call	BDOS
+	cp	a,30H		;IS IT 3.0 OR GREATER
+	jp	c,ONLY30	;THIS VERSION FOR CPM 3.0 AND LATER
+	ret
+
+CKNAME:
+	ld	a,(DEFFCB)	;GET DRIVE FOR FILE
+	or	a,a		;USE DEFAULT?
+	jr	nz,NODEF	;NO CONVERT TO FCB FORMAT
+	ld	c,GETCUR	;GET CURRENT DISK
+	call	BDOS
+	inc	a		;SET UP FOR DECREMENT
+NODEF:
+	dec	a		;CONVERT TO FCB FORMAT
+	ld	(DEFFCB),a	;SAVE IT
+	ld	a,(DEFFCB+1)	;CHECK FOR NO FILE
+	cp	a,' '+1
+	ret	nc		;RETURN IF OK
+	ld	de,NAMERR	;PRINT FILE ERROR
+	call	PRTMSG
+	jp	WRMBOOT 	;GIVE UP
+
+SETSRCDST:
+        ld	c,GETUSR       	;GET USER #
+        ld	e,0FFH         	;GET USER FLAG
+        call	BDOS
+        ld	(CURUSR),a	;SAVE USER #
+	ld	hl,DEFFCB2+1	;POINT TO 1ST DESTINATION CHAR.
+	ld	a,' '
+	cp	a,(hl)
+	jp	z,UNERASE	;UNERASE IF NO DEST. USER #
+	ld	b,'0'
+	ld	c,(hl)
+	inc	hl
+	cp	a,(hl)
+	jr	z,CHGUSR	;SINGLE DIGIT ASCII USER # IN BC
+	ld	b,c
+	ld	c,(hl)
+	inc	hl
+	cp	a,(hl)
+	jr	nz,USRERROR	;TWO DIGIT ASCII USER # IN BC IF ZERO
+CHGUSR:
+	ld	d,0		;INITIAL VALUE FOR HIGH DIGIT
+	ld	a,'0'
+	cp	a,b
+	jr	z,CHGUSR1	;OK IF HIGH DIGIT IS '0'
+	inc	a		;A = '1'
+	cp	a,b
+	jr	nz,USRERROR	;ERROR IF HIGH DIGIT NOT '0' OR '1'
+	ld	d,10		;VALUE FOR HIGH DIGIT IF '1'
+CHGUSR1:
+	ld	a,'0'-1
+	cp	a,c
+	jr	nc,USRERROR	;ERROR IF LOW DIGIT < '0'
+	ld	a,'9'
+	cp	a,c
+	jr	c,USRERROR	;ERROR IF LOW DIGIT > 9
+	ld	a,c
+	sbc	a,'0'		;MAKE LOW DIGIT HEX
+	add	a,d
+	cp	a,16
+	jr	nc,USRERROR	;ERROR IF USER # > 15
+	ld	(DSTUSR),a	;DEST. USER # IN HEX
+	ld	a,(CURUSR)
+	ld	(SRCUSR),a	;SOURCE USER # IS CURRENT USER #
+	ret
+
+UNERASE:
+	ld	a,(CURUSR)	;PLACE FILE IN CURRENT USER
+	ld	(DSTUSR),a
+	ld	a,0E5H		;E5H = ERASED FILE "USER #"
+	ld	(SRCUSR),a
+	ret
+
+USRERROR:
+	ld	de,USRERR
+	call	PRTMSG
+	jp	WRMBOOT
+
+SETBIOS:			;SET UP LOCAL BIOS JUMP VECTOR
+	ld	bc,LOCDMA	;GET DEFAULT DMA ADDRESS
+	ld	(BCREG),bc
+	ld	a,12		;SET DMA TO DEFAULT
+	ld	(FUNC),a
+	call	CALLBIOS
+	call	DSKPRM		;GET DISK PARAMETERS FROM BDOS
+	ld	a,(DEFFCB)	;SELECT DRIVE
+	ld	c,a
+	ld	b,0
+	ld	e,b
+	ld	(BCREG),bc		;BIOS SELDSK FUNCTION
+	ld	(DEREG),de
+	ld	a,9		;SELDSK
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	a,h
+	or	a,l		;CHECK FOR DRIVE ERROR
+	jp	z,NODRV		;GO REPORT IT
+	ld	e,(hl)		;GET DPH ADDRESS
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	ld	(DPHADD),hl	;SAVE ADDRESS TO DPH
+	ret
+
+DSKPRM:
+	ld	a,(DEFFCB)
+	ld	e,a
+	ld	c,14		;SELECT DISK
+	call	BDOS
+	ld	c,GETPARM	;GET ADDRESS OF DISK PARMS
+	call	BDOS
+	ld	e,(hl)		;GET LOGICAL SPT
+	inc	hl
+	ld	d,(hl)
+	ld	(SPT),de
+	ld	de,6		;OFFSET TO DRM (# OF DIRECTORY ENTRIES)
+	add	hl,de		;ADD OFFSET
+	ld	e,(hl)		;GET DRM
+	inc	hl
+	ld	d,(hl)
+	push	de
+	push	hl
+	ld	de,7		;POINT TO PSH
+	add	hl,de
+	ld	a,(hl)		;GET IT
+	ld	(PSH),a		;SAVE IT
+	pop	hl
+	pop	de
+	ex	de,hl
+	inc	hl		;ADD 1 FOR TOTAL DIRECTORY ENTRIES
+	ld	a,(PSH)
+	cp	a,6		;8192 BYTE SECTORS
+	call	z,PSH8192
+	ld	a,(PSH)
+	cp	a,5		;4096 BYTE SECTORS
+	call	z,PSH4096
+	ld	a,(PSH)
+	cp	a,4		;2048 BYTE SECTORS
+	call	z,PSH2048
+	ld	a,(PSH)
+	cp	a,3		;1024 BYTE SECTORS
+	call	z,PSH1024
+	ld	a,(PSH)
+	cp	a,2		;512 BYTE SECTORS
+	call	z,PSH512
+	ld	a,(PSH)
+	cp	a,1		;256 BYTE SECTORS
+	call	z,PSH256
+	ld	a,(PSH)
+	or	a,a		;128 BYTE SECTORS
+	call	z,PSH128
+	ld	a,l		;SAVE # OF DIRECTORY SECTORS
+	ld	(DIRSECTS),a
+	ld	hl,(SPT)	;LOGICAL SECTORS PER TRACK
+	ld	a,(PSH)
+	cp	a,6		;8192 BYTE SECTORS
+	call	z,DIV64
+	ld	a,(PSH)
+	cp	a,5		;4096 BYTE SECTORS
+	call	z,DIV32
+	ld	a,(PSH)
+	cp	a,4		;2048 BYTE SECTORS
+	call	z,DIV16
+	ld	a,(PSH)
+	cp	a,3		;1024 BYTE SECTORS
+	call	z,DIV8
+	ld	a,(PSH)
+	cp	a,2		;512 BYTE SECTORS
+	call	z,DIV4
+	ld	a,(PSH)
+	cp	a,1		;256 BYTE SECTORS
+	call	z,DIV2
+	ld	a,l		;PHSPT = SPT FOR 128 BYTE SECTORS
+	ld	(PHSPT),a	;PHYSICAL SECTORS PER TRACK
+	ld	hl,5		;ADD OFFSET TO NUMBER OF RESERVED TRACKS
+	add	hl,de
+	ld	e,(hl)		;GET NUMBER OF RESERVED TRACKS
+	inc	hl
+	ld	d,(hl)
+	ld	(RESTKS),de	;SAVE RESERVED TRACKS FOR LATER
+	ret
+
+ONLY30:
+	ld	de,ERR30 	;PRINT MESSAGE FOR CPM PLUS ONLY
+	call	PRTMSG
+	jp	WRMBOOT
+
+GETDIR:
+	ld	a,(DIRSECTS)	;GET # OF DIRECTORY SECTORS
+	or	a,a
+	ret	z		;RETURN IF NONE
+	call	PHSECTRK	;COMPUTE CURRENT PHYSICAL SECTOR AND TRACK
+	ld	bc,(RESTKS)	;GET NUMBER OF RESERVED TRACKS IN BC
+	ld	h,0		;GET PHYSICAL TRACK NUMBER IN HL
+	ld	a,(PHTRK)
+	ld	l,a
+	add	hl,bc		;DIRECTORY TRACK IN HL
+	ld	(BCREG),hl	;SET TRACK TO DIRECTORY
+	ld	a,10		;SETTRK
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	a,(PHSECT)	;GET CURRENT PHYSICAL SECTOR
+	ld	c,a
+	call	TRNSEC		;TRANSLATE SECTOR IF NECESSARY
+	ld	b,0
+	ld	(BCREG),bc	;POINT TO CURRENT SECTOR
+	ld	a,11		;SETSEC
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	a,13		;READ SECTOR OF DIRECTORY
+	ld	(FUNC),a
+	call	CALLBIOS
+	and	a,1
+	xor	a,1
+	ret
+
+CKENT:
+	xor	a		;ZERO FLAG
+	ld	(RECFLG),a
+	ld	a,(DVD)		;GET NUMBER OF DIRECTORY ENTRIES PER SECTOR
+	ld	b,a
+	ld	hl,LOCDMA
+CKNXT:
+	ld	a,(SRCUSR)
+	ld	d,a		;SOURCE USER # IN D
+	ld	a,(hl)		;GET BYTE
+	cp	a,d		;CHECK FOR SOURCE USER #
+	jp	nz,GETNXT	;NOPE SKIP
+	push	hl
+	call	CKFIL		;YES CHECK FOR RECOVERY
+	pop	hl
+RECENT:
+	jp	nz,GETNXT
+	ld	a,(DSTUSR)
+	ld	(hl),a		;RECOVER/CHANGE THE ENTRY
+	ld	a,0FH		;SET RECOVERED FLAG
+	ld	(RECFLG),a
+	ld	a,(NOREC)	;INCREMENT NUMBER OF RECORDS FOUND
+	inc	a
+	ld	(NOREC),a
+GETNXT:
+	ld	de,32		;ADVANCE TO NEXT ENTRY
+	add	hl,de
+	dec	b		;DECREMENT COUNTER
+	jp	nz,CKNXT
+	ld	a,(RECFLG)	;CHECK FOR RECOVERED/CHANGED ENTRY
+	or	a,a
+	jp	z,LOOP		;NOPE CONTINUE LOOP
+				;WRITE SECTOR BACK TO DISK IF FILE REC/CHG
+	call	PHSECTRK	;COMPUTE CURRENT PHYSICAL SECTOR AND TRACK
+	ld	bc,(RESTKS)	;GET NUMBER OF RESERVED TRACKS IN BC
+	ld	h,0		;GET PHYSICAL TRACK NUMBER IN HL
+	ld	a,(PHTRK)
+	ld	l,a
+	add	hl,bc		;DIRECTORY TRACK IN HL
+	ld	(BCREG),hl	;SET TRACK TO DIRECTORY
+	ld	a,10		;SETTRK
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	a,(PHSECT)	;GET CURRENT PHYSICAL SECTOR
+	ld	c,a
+	call	TRNSEC		;TRANSLATE SECTOR
+	ld	b,0
+	ld	(BCREG),bc		;POINT TO CURRENT SECTOR
+	ld	a,11		;SETSEC
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	bc,1		;NONE DEFERRED WRITE
+	ld	(BCREG),bc
+	ld	a,14		;WRITE
+	ld	(FUNC),a
+	call	CALLBIOS	;UPDATE DIRECTORY
+	or	a,a		;CHECK FOR WRITE ERROR
+	jp	nz,WRTERROR	;REPORT ERROR
+LOOP:
+	ld	a,(DIRSECTS)	;DECREMENT DIRECTORY SECTORS
+	dec	a
+	ld	(DIRSECTS),a
+	ld 	a,(SECTOR)	;INCREMENT SECTOR
+	inc	a
+	ld	(SECTOR),a
+	ret
+
+CKFIL:
+	inc	hl		;CHECK DELETED ENTRY FOR RECOVERY
+	ld	de,DEFFCB+1	;POINT AT FILE TO BE RECOVERED
+	ex	de,hl
+	ld	c,11		;LOOK AT 11 CHARACTERS
+CMPFIL:
+	ld	a,'?'		;CHECK TO SEE IF SPEC IS AMBIGUOUS
+	cp	a,(hl)
+	jp	z,NXTCHR
+	ld	a,(de)		;GET CHARACTER IN NAME
+	and	a,7FH		;TURN OFF HIGH BIT
+	cp	a,(hl)		;ARE THEY EQUAL?
+	ret	nz		;NOPE GO GET ANOTHER ENTRY
+NXTCHR:
+	inc	de		;YES, CONTINUE
+	inc	hl
+	dec	c
+	jp	nz,CMPFIL
+	ret
+
+PSH8192:
+	xor	a		;256 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a		;0 gives 256 loops
+	jr	DIV256
+PSH4096:
+	ld	a,128		;128 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV128
+PSH2048:
+	ld	a,64		;64 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV64
+PSH1024:
+	ld	a,32		;32 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV32
+PSH512:
+	ld	a,16		;16 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV16
+PSH256:
+	ld	a,8		;8 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV8
+PSH128:
+	ld	a,4		;4 DIRECTORY ENTRIES PER SECTOR
+	ld	(DVD),a
+	jr	DIV4
+
+DIV256:				;DIVIDE HL BY 256
+	call	DIV2
+DIV128:				;DIVIDE HL BY 128
+	call	DIV2
+DIV64:				;DIVIDE HL BY 64
+	call	DIV2
+DIV32:				;DIVIDE HL BY 32
+	call	DIV2
+DIV16:				;DIVIDE HL BY 16
+	call	DIV2
+DIV8:				;DIVIDE HL BY 8
+	call	DIV2
+DIV4:				;DIVIDE HL BY 4
+	call	DIV2
+DIV2:				;DIVIDE HL BY 2 ROUTINE
+	xor	a		;CLEAR CARRY
+	ld	a,h		;GET HIGH ORDER BYTE
+	rra			;SHIFT RIGHT FOR A DIVIDE BY 2
+	ld	h,a
+	ld	a,l		;GET LOW ORDER BYTE
+	rra			;SHIFT RIGHT FOR A DIVIDE BY 2
+	ld	l,a
+	ret
+
+PHSECTRK:
+	ld	c,0		;SET PHTRK TO 0
+	ld	a,(PHSPT)
+	ld	b,a		;PHYS SPT IN B
+	ld	a,(SECTOR)	;LOGICAL DIRECTORY SECTOR
+CKPHTRK:
+	cp	a,b		;COMPUTE PHSECT = SECTORS MOD PHSPT
+	jr	c,STSECTRK	;AND PHTRK = (SECTORS - PHSECT)/PHSPT
+	sub	a,b
+	inc	c
+	jr	CKPHTRK
+
+STSECTRK:
+	ld	(PHSECT),a
+	ld	a,c
+	ld	(PHTRK),a
+	ret
+
+PRTMSG:
+	ld	c,PRINT 	;PRINT STRING TO CONSOLE
+	jp	BDOS
+
+NODRV:				;PRINT DRIVE ERROR MESSAGE
+	ld	de,DRVERR
+	call	PRTMSG
+	jp	WRMBOOT
+
+WRTERROR:			;PRINT WRITE ERROR MESSAGE
+	ld	de,WRTERR
+	call	PRTMSG
+	jp	WRMBOOT
+
+TRNSEC:
+	ld	hl,(DPHADD)	;GET TRANSLATE TABLE ADDRESS
+	ex	de,hl
+	ld	(BCREG),bc
+	ld	(DEREG),de
+	ld	a,16		;SECTRAN
+	ld	(FUNC),a
+	call	CALLBIOS
+	ld	c,l
+	ret
+
+CALLBIOS:			;CPM 3.0 DIRECT BIOS CALL
+	ld	c,DIRCALL
+	ld	de,FUN50
+	jp	BDOS
+
+
+	dseg
+
+FUN50:
+FUNC:	DS	1
+AREG:	DS	1
+BCREG:	DS	2
+DEREG:	DS	2
+HLREG:	DS	2
+DPHADD:
+	DS	2
+DIRSECTS:
+	DS	1
+RESTKS: DS	2
+SECTOR: DB	0
+NOREC:	DB	0
+RECFLG: DB	0
+PSH:	DS	1
+DVD:	DB	0
+CURUSR: DS      1
+SPT:	DS	2
+PHSPT:	DS	1
+PHSECT:	DS	1
+PHTRK:	DS	1
+SRCUSR:	DS	1
+DSTUSR:	DS	1
+
+WRTERR:
+	DB	CR,LF,'Error occurred during disk Write - ABORT$'
+DRVERR:
+	DB	CR,LF,'Specified an illegal disk drive - ABORT$'
+RECMSG:
+	DB	CR,LF,'File recovered.$'
+CHGMSG:
+	DB	CR,LF,'File user area changed.$'
+NAMERR:
+	DB	CR,LF,'No File Name specified - ABORT$'
+FILERR:
+	DB	CR,LF,'File NOT found$'
+USRERR:
+	DB	CR,LF,'Invalid User Number - ABORT$'
+ERR30:
+	DB	CR,LF,'THIS VERSION OF U3 ONLY WORKS'
+	DB	CR,LF,'FOR CPM 3.0 OR LATER',CR,LF,'$'
+
+
+;	bss - uninitialised memory after code and data
+
+STACK	EQU	$+256		; 256 bytes for stack
+
+LOCDMA	EQU	STACK		; space for one phys sector
+
+	END

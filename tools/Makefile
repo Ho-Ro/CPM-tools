@@ -61,10 +61,11 @@ zipdir.com: zipdir.z80 Makefile
 	$(LINK) zipdir
 	rm -f zipdir.rel
 
-u3.com: u3.asm
-	$(MAC) u3
-	$(LOAD) u3
-	rm -f u3.hex u3.prn u3.sym
+u3.com: u3.z80
+	$(ZSM4) =u3.z80
+	$(LINK) u3
+	rm -f u3.rel u3.sym
+
 
 # test files to compare buffered and unbuffered fgetc() anf fputc() speed of z88dk libc
 gunzipb.com: gunzip.c Makefile
